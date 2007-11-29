@@ -1,0 +1,60 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+    <title>FilesModule</title>
+    <meta name="author" content="Donald Boyce">
+    <link href="Libf95dplab.css" rel="stylesheet" type="text/css" >
+
+  </head>
+
+  <body>
+    <h1>FilesModule</h1>
+<P> <A HREF="index.html">(back)</A>
+<H2>Public Data</H2>
+<span class="public-data">STANDARD_INPUT</span><br>
+<span class="public-data">STANDARD_OUTPUT</span><br>
+<span class="public-data">STANDARD_ERROR</span><br>
+    
+<H2>Public Routines</H2>
+<A HREF="#NewUnitNumber"><span class="public-routines">NewUnitNumber</span></A>,
+<A HREF="#GetUnitNumber"><span class="public-routines">GetUnitNumber</span></A>
+<PRE NAME="NewUnitNumber">
+  
+  FUNCTION NewUnitNumber() RESULT(unit)
+    !
+    !  ***  Description:  
+    !
+    ! Return available unit number.
+    !
+    !  *** Result:
+    !  
+    INTEGER(IK) :: unit
+    !
+    ! unit : -1 --> failed to find new unit
+    !      : >0 --> an available fortran unit number
+    
+</PRE>
+    <PRE NAME="GetUnitNumber">
+  FUNCTION  GetUnitNumber(file, ACTION, FORM)
+    !
+    !  Return unit number of file, if opened, or open a new file
+    !  with appropriate options.
+    !
+    !--------------*-------------------------------------------------------
+    !
+    !  Arguments.
+    !
+    !  file   -- name of file (possibly open)
+    !  ACTION -- (optional) defaults to 'READWRITE'
+    !  FORM   -- (optional) defaults to 'FORMATTED'
+    !
+    INTEGER(IK) :: GetUnitNumber  ! result
+    !
+    CHARACTER(LEN=*) :: file, ACTION, FORM
+    !
+    INTENT(IN   ) :: file, ACTION, FORM
+    !
+    OPTIONAL :: ACTION, FORM
+      </PRE>
+  </body>
+</html>

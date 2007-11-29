@@ -1,0 +1,40 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+    <title>IntrinsicTypesModule</title>
+    <meta name="author" content="Donald Boyce">
+    <link href="Libf95dplab.css" rel="stylesheet" type="text/css" >
+
+  </head>
+
+  <body>
+    <h1>IntrinsicTypesModule</h1>
+<P> <A HREF="index.html">(back)</A>
+
+<H2>Public Data</H2>
+<P>
+<SPAN CLASS="public-data">INTEGER_KIND_S</SPAN> : short integer kind (at least 9 digits)<br>
+<SPAN CLASS="public-data">INTEGER_KIND_L</SPAN> : long integer kind (at least 15 digits)<br>
+<SPAN CLASS="public-data">INTEGER_KIND</SPAN>   : default integer kind for this module (short)<br>
+
+<PRE>
+INTEGER_KIND_S = SELECTED_INT_KIND(9)
+INTEGER_KIND_L = SELECTED_INT_KIND(15)
+INTEGER_KIND   = INTEGER_KIND_S
+</PRE>
+
+<PRE>
+REAL_KIND_S = SELECTED_REAL_KIND( 5,  30)
+REAL_KIND_D = SELECTED_REAL_KIND(14, 200)
+REAL_KIND_Q = SELECTED_REAL_KIND(25, 200)
+REAL_KIND = REAL_KIND_D
+
+LOGICAL_KIND_D = KIND(.TRUE.)
+LOGICAL_KIND = LOGICAL_KIND_D
+  
+</PRE>
+    
+    
+    
+  </body>
+</html>

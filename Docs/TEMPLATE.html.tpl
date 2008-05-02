@@ -3,7 +3,7 @@
   <head>
     <title>(>>>title<<<)</title>
     <meta name="author" content="(>>>USER_NAME<<<)">
-    <link href="*.css" rel="stylesheet" type="text/css" >
+    <link href="libf95.css" rel="stylesheet" type="text/css" >
 			 
   </head>
 

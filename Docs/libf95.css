@@ -1,0 +1,13 @@
+/* Sample Style Sheet */
+
+H1, H2, H3 {
+    text-align: center;
+    
+}
+pre{
+    padding-left: 5%;
+}
+pre.routine{
+    padding-left: 0%;
+    color: #0000AA;
+}

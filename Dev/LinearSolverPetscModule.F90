@@ -43,6 +43,12 @@ MODULE LinearSolverPetscModule
 #include "include/finclude/petscsys.h"
 #include "include/finclude/petscviewer.h"
   !
+  ! ==================== Config
+  !
+  LOGICAL,          PARAMETER :: DFLT_SYMMETRY = .TRUE.
+  INTEGER,          PARAMETER :: PREALLOCATION_FACTOR = 4 ! for estimating DOF per row
+  DOUBLE PRECISION, PARAMETER :: DEFAULT_ERROR_TOL = 1.0d-12
+  !
   ! ==================== Types
   !
   !  Helper type for connectivity and bcs.
@@ -50,7 +56,7 @@ MODULE LinearSolverPetscModule
   !
   TYPE SystemConn
     !  Signed Connectivity
-    INTEGER, POINTER :: sconn(:, :) => NULL(), bcs(:)  => NULL() 
+    INTEGER, ALLOCATABLE :: sconn(:, :), bcs(:)
   END TYPE SystemConn
   !
   !  Main type for linear solver.
@@ -72,7 +78,7 @@ MODULE LinearSolverPetscModule
     INTEGER, ALLOCATABLE :: section_beg(:) ! (numprocs, MAXSYS) 
     !
     Type(SystemConn) :: sysConn
-    LOGICAL          :: symmetry
+    LOGICAL          :: symmetry = DFLT_SYMMETRY
     !
   END TYPE LinearSolverType
   !
@@ -80,8 +86,6 @@ MODULE LinearSolverPetscModule
   !
   LOGICAL :: PetscInitialized = .FALSE.
   !
-  INTEGER,          PARAMETER :: PREALLOCATION_FACTOR = 4 ! for estimating DOF per row
-  DOUBLE PRECISION, PARAMETER :: DEFAULT_ERROR_TOL = 1.0d-12
   !
   !  Module variables.
   !
@@ -97,8 +101,6 @@ MODULE LinearSolverPetscModule
   PetscViewer viewer
   !
   !  Petsc items.
-  !
-  LOGICAL, PARAMETER :: SYMMETRY_DFLT = .TRUE.
   !
   INTEGER :: numprocs = 0, myrank = -1
   !
@@ -127,6 +129,7 @@ MODULE LinearSolverPetscModule
   !
 CONTAINS ! ================================================== Module Procedures
   !
+  ! ==================================================== BEGIN:  LinearSolverPetscInit
   SUBROUTINE LinearSolverPetscInit(status)
     !
     !  Module initialization.  
@@ -155,164 +158,126 @@ CONTAINS ! ================================================== Module Procedures
     PetscInitialized = .TRUE.
     !
   END SUBROUTINE LinearSolverPetscInit
-  !
-  !
-  SUBROUTINE LinearSolverCreate(self)
+  ! ====================================================   END:  LinearSolverPetscInit
+  ! ==================================================== BEGIN:  LinearSolverCreate
+  SUBROUTINE LinearSolverCreate(self, conn, bcnodes, locsizes, SYMM)
     !
     !  Create an instance of a linear solver.
     !
+    ! ========== Arguments
+    !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
+    INTEGER, INTENT(IN) :: conn(:, :)
+    INTEGER, INTENT(IN) :: bcnodes(:)
+    INTEGER, INTENT(IN) :: locsizes(0:)
+    LOGICAL, INTENT(IN), OPTIONAL :: SYMM
+    !
+    INTEGER, INTENT(OUT), OPTIONAL :: STATUS
+    !
+    !  locsizes -- number of degrees of freedom on each processor
+    !
+    !  conn     -- 1-based connectivity section (for DOF's of the system)
+    !           -- each process passes some section of the connectivity
+    !
+    !  bcnodes  -- 1-based global list of DOF numbers with essential BC's
+    !           -- each process needs to pass the complete list of DOF numbers.
+    !
+    !  locsizes -- number of degrees of freedom on each processor
+    !
+    !  SYMM     -- symmetric system indicator (optional) 
+    !
+    !  status   -- return value (optional):  0 for success (not used at the moment)
+    !
+    ! ========== Locals
+    !
+    INTEGER :: iproc, ndof_loc, ndof_glo, aStat
+    INTEGER :: rowAlloc, IERR
+    !
+    INTEGER, ALLOCATABLE :: bcsign(:)
+    !
     ! ================================================== Executable Code
+    !
+    !  Initialize module, if not already.
     !
     IF (.NOT. PetscInitialized) THEN
       CALL LinearSolverPetscInit()
     END IF
     !
-    !  Allocate arrays.
+    !  Set status.
+    !
+    IF (PRESENT(STATUS)) THEN
+      STATUS = 0
+    END IF
+    !
+    !  Set symmetry.
+    !
+    IF (PRESENT(SYMMETRY)) THEN
+      self % symmetry = SYMMETRY
+    END IF
+    !
+    ! ========== Local array sizes and ranges
     !
     ALLOCATE(self % localsizes (0:(numprocs-1)), &
-         &   self % section_beg(0:(numprocs-1)) &
-         &  )    
+         &   self % section_beg(0:(numprocs-1))  )    
     !
-  END SUBROUTINE LinearSolverCreate
-  !
-  SUBROUTINE LinearSolverPetscSetup(systemid, &
-       &  conn, bcnodes, locsizes, &
-       &  SYMM, STATUS)
-    !
-    !  ***  Description:  
-    !
-    !  Sets up matrix A and vectors x and b for solution
-    !  of linear equation:  Ax = b
-    !
-    !  *** Argument Declarations:
-    !
-    INTEGER, INTENT(OUT) :: systemid
-    !
-    !  systemid -- identifier for the system
-    !
-    INTEGER, INTENT(IN) :: conn(:, :)
-    !
-    !  conn -- 1-based connectivity section (for DOF's of the system)
-    !
-    !  Each process passes some section of the connectivity. 
-    !
-    INTEGER, INTENT(IN) :: bcnodes(:)
-    !
-    !  bcnodes -- 1-based global list of DOF numbers with essential BC's
-    !
-    !  Each process needs to pass the complete list of DOF numbers.
-    !
-    INTEGER, INTENT(IN) ::  locsizes(0:)
-    !
-    !  locsizes -- number of degrees of freedom on each processor
-    !
-    LOGICAL, INTENT(IN), OPTIONAL :: SYMM
-    !
-    !  SYMM -- symmetric system indicator
-    !
-    INTEGER, INTENT(OUT), OPTIONAL :: STATUS
-    !
-    !  status -- return value:  0 for success (not used at the moment)
-    !
-    !  *** Locals:
-    !
-    INTEGER :: isys, allocstat, ierr, iproc, ibeg
-    INTEGER :: dofpe, numel, numbc, numdof, rowalloc, ndof_glo, ndof_loc
-    INTEGER, ALLOCATABLE :: bcsign(:)
-    !
-    !  *** End:
-    !
-    !--------------*-------------------------------------------------------
-    !
-    if (PRESENT(STATUS)) then
-      STATUS = 0
-    end if
-    !
-    !  Get available system-id.
-    !
-    systemid = 0
-    do isys = 1, MAXSYS
-      print *, 'in LinearSolverPetscSetup:  ', isys
-      if (.NOT. sys_used(isys)) then
-        systemid = isys
-        sys_used(isys) = .TRUE.
-        EXIT
-      end if
+    self % localsizes  = locsizes
+    self % section_beg(0) = 1
+    do iproc=1, numprocs - 1
+      self % section_beg(iproc) = self % section_beg(iproc - 1) + locsizes(iproc - 1)
     end do
     !
-    if (systemid == 0) then
-      RETURN ! all systems in use
-    end if
+    ! ========== Connectivity and BCs
     !
-    if (PRESENT(SYMM)) then
-      SYMMETRY(systemid) = SYMM
-    else
-      SYMMETRY(systemid) = SYMMETRY_DFLT
-    end if
-    !
-    !  Now set up a new system.
-    !
-    print *, 'in LinearSolverPetscSetup:  setting up new system'
     ndof_glo = SUM(locsizes)
     ndof_loc = locsizes(myrank)
-    localsizes(:, systemid) = locsizes
-    section_beg(0, systemid) = 1
-    ibeg = 1
-    do iproc=1, numprocs - 1
-      ibeg = ibeg + locsizes(iproc - 1)
-      section_beg(iproc, systemid) = ibeg
-    end do
     !
     dofpe  = SIZE(conn, 1)
     numel  = SIZE(conn, 2)
     numbc  = SIZE(bcnodes)
     !
-    print *, 'in LinearSolverPetscSetup:  allocating'
-    ALLOCATE(sysconn(systemid)%bcs(numbc), &
-         &   sysconn(systemid)%sconn(dofpe, numel),&
+    ALLOCATE(self % sysConn % bcs(numbc), &
+         &   self % sysConn % sconn(dofpe, numel),&
          &   bcsign(ndof_glo),&
-         &   STAT=allocstat)
-    ! TODO:  check allocstat and deallocate if allocation failed
+         &   STAT=aStat)
+    ! TODO:  check aStat and deallocate if allocation failed
     !
-    sysconn(systemid)%bcs   = bcnodes - 1
+    self % sysconn % bcs = bcnodes - 1 ! make zero-based
+    !
+    !  This makes the connectivity negative for nodes with BCs.
+    !  These are then ignored by PETSc. [checked 2009-04-30, see MatSetValues docs]
+    !
     bcsign = 1
     bcsign(bcnodes) = -1
-    !
-    sysconn(systemid)%sconn = conn*&
+    sysconn % sconn = conn*&
          &   RESHAPE(bcsign(RESHAPE(conn, (/dofpe*numel/))), &
          &   (/dofpe, numel/)) - 1 ! changes sign for BC dof
     !
     DEALLOCATE(bcsign)
     !
-    !  Create PetSc matrix and vectors.
+    ! ========== Make PETSc objects
     !
-    !  Assemble a matrix of ones to get form of matrix.
+    ! Matrix A
     !
-    print *, 'in LinearSolverPetscSetup:  ready to call MatCreateMPIAIJ'
-    rowalloc = PREALLOCATION_FACTOR*dofpe
+    rowAlloc = PREALLOCATION_FACTOR*dofpe
     call MatCreateMPIAIJ(PETSC_COMM_WORLD, ndof_loc, ndof_loc,&
          &   ndof_glo, ndof_glo, &
-         &   rowalloc, PETSC_NULL_INTEGER, rowalloc, PETSC_NULL_INTEGER, &
-         &   A(systemid), ierr)  ! hardwired for fsw
+         &   rowAlloc, PETSC_NULL_INTEGER, rowAlloc, PETSC_NULL_INTEGER, &
+         &   self % A, IERR)
     !
-    if (SYMMETRY(systemid)) then
-      call MatSetOption(A(systemid), MAT_SYMMETRIC, ierr)
+    if (self % symmetry) then
+      CALL MatSetOption(self % A, MAT_SYMMETRIC, IERR)
     end if
     !
-    call VecCreateMPI(PETSC_COMM_WORLD, ndof_loc, ndof_glo, &
-         &  x(systemid), ierr)
-    call VecDuplicate(x(systemid), b(systemid), ierr)
-    call VecDuplicate(x(systemid), x0(systemid), ierr)
-    call VecDuplicate(x(systemid), ax0(systemid), ierr)
+    ! Vectors x, b, x0, ax0
     !
-  END SUBROUTINE LinearSolverPetscSetup
-  !
-  !  *** Program Unit:  subroutine
-  !  ***    Unit Name:  LinearSolverPetscSolve
-  !
-  !  *** Unit Declaration: 
+    call VecCreateMPI(PETSC_COMM_WORLD, ndof_loc, ndof_glo, self % x, IERR)
+    call VecDuplicate(self % x, self % b, IERR)
+    call VecDuplicate(self % x, self % x0, IERR)
+    call VecDuplicate(self % x, self % ax0, IERR)
+    !
+  END SUBROUTINE LinearSolverCreate
+  ! ==================================================== LinearSolverCreate:  END
   !
   SUBROUTINE LinearSolverPetscSolve(sysid, sol, emats, &
        &   ERHS, ARHS, &

@@ -1,3 +1,5 @@
+!  $Id$
+!
 MODULE TimerModule 
   !
   !  This module handles the Timer object.

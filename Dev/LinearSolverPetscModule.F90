@@ -108,7 +108,7 @@ MODULE LinearSolverPETScModule
   !
   PUBLIC :: LinearSolverCreate
   !
-CONTAINS ! ================================================== Module Procedures
+CONTAINS ! ====================================================  MODULE PROCEDURES
   !
   ! ==================================================== BEGIN:  LinearSolverPETScInit
   SUBROUTINE LinearSolverPETScInit(status)

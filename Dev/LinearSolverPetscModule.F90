@@ -5,27 +5,6 @@ MODULE LinearSolverPetscModule
   !  This module interfaces the Petsc solver with our
   !  parallel finite element codes.
   !
-  !  CONVERGENCE REASONs
-  !typedef enum {/* converged */
-  !              KSP_CONVERGED_RTOL               =  2,
-  !              KSP_CONVERGED_ATOL               =  3,
-  !              KSP_CONVERGED_ITS                =  4,
-  !              KSP_CONVERGED_CG_NEG_CURVE       =  5,
-  !              KSP_CONVERGED_CG_CONSTRAINED     =  6,
-  !              KSP_CONVERGED_STEP_LENGTH        =  7,
-  !              KSP_CONVERGED_HAPPY_BREAKDOWN    =  8,
-  !              /* diverged */
-  !              KSP_DIVERGED_NULL                = -2,
-  !              KSP_DIVERGED_ITS                 = -3,
-  !              KSP_DIVERGED_DTOL                = -4,
-  !              KSP_DIVERGED_BREAKDOWN           = -5,
-  !              KSP_DIVERGED_BREAKDOWN_BICG      = -6,
-  !              KSP_DIVERGED_NONSYMMETRIC        = -7,
-  !              KSP_DIVERGED_INDEFINITE_PC       = -8,
-  !              KSP_DIVERGED_NAN                 = -9,
-  !              KSP_DIVERGED_INDEFINITE_MAT      = -10,
-  ! 
-  !              KSP_CONVERGED_ITERATING          =  0} KSPConvergedReason;
   !
   USE IntrinsicTypesModule,  RK=>REAL_KIND, IK=>INTEGER_KIND, LK=>LOGICAL_KIND
   !
@@ -755,25 +734,26 @@ CONTAINS ! ================================================== Module Procedures
 
     !
   END SUBROUTINE SolveSystem
-
+  !
+  ! ==================================================== BEGIN:  DescribeDivergedReason
   SUBROUTINE DescribeDivergedReason(u, reason)
-
-    integer u, reason
-
-    character(len=*), parameter :: eMessage = '**** PETSc solver failed:  '
-    character(len=100) :: divReason
-
-    !              KSP_DIVERGED_NULL                = -2,
-    !              KSP_DIVERGED_ITS                 = -3,
-    !              KSP_DIVERGED_DTOL                = -4,
-    !              KSP_DIVERGED_BREAKDOWN           = -5,
-    !              KSP_DIVERGED_BREAKDOWN_BICG      = -6,
-    !              KSP_DIVERGED_NONSYMMETRIC        = -7,
-    !              KSP_DIVERGED_INDEFINITE_PC       = -8,
-    !              KSP_DIVERGED_NAN                 = -9,
-    !              KSP_DIVERGED_INDEFINITE_MAT      = -10,
     !
-    !  
+    !  Print text for error code.
+    !
+    !  u      -- unit to write to
+    !  reason -- PETSc failure code
+    !
+    ! ========== Arguments
+    !
+    INTEGER, INTENT(IN) :: u, reason    
+    !
+    ! ========== Locals
+    !
+    CHARACTER(LEN=*), PARAMETER :: eMessage = '**** PETSc solver failed:  '
+    CHARACTER(LEN=100)          :: divReason
+    !
+    ! ================================================== Executable Code
+    !
     SELECT CASE(reason)   
       !
     CASE (KSP_DIVERGED_NULL)   
@@ -783,11 +763,14 @@ CONTAINS ! ================================================== Module Procedures
     CASE (KSP_DIVERGED_DTOL)   
       divReason = 'norm(r) >= dtol*norm(b)'
     CASE (KSP_DIVERGED_BREAKDOWN)   
-      divReason = 'A breakdown in the Krylov method was detected so the method could not continue to enlarge the Krylov space. '
+      divReason = 'A breakdown in the Krylov method was detected so the method &
+           &could not continue to enlarge the Krylov space. '
     CASE (KSP_DIVERGED_BREAKDOWN_BICG)   
-      divReason = 'A breakdown in the KSPBICG method was detected so the method could not continue to enlarge the Krylov space.'
+      divReason = 'A breakdown in the KSPBICG method was detected so the method &
+           &could not continue to enlarge the Krylov space.'
     CASE (KSP_DIVERGED_NONSYMMETRIC)   
-      divReason = 'It appears the operator or preconditioner is not symmetric and this Krylov method (KSPCG, KSPMINRES, KSPCR) requires symmetry '
+      divReason = 'It appears the operator or preconditioner is not symmetric and &
+           &this Krylov method (KSPCG, KSPMINRES, KSPCR) requires symmetry '
     CASE (KSP_DIVERGED_INDEFINITE_PC)   
       divReason = 'It appears the preconditioner is indefinite'
     CASE (KSP_DIVERGED_NAN)   
@@ -800,9 +783,31 @@ CONTAINS ! ================================================== Module Procedures
       !
     END SELECT
 
-    write(u, '(a)') eMessage // trim(divReason)
-
-
+    WRITE(u, '(a)') eMessage // TRIM(divReason)
+    !
+    ! ==================== Error Codes
+    !
+    !  CONVERGENCE REASONs
+    !typedef enum {/* converged */
+    !              KSP_CONVERGED_RTOL               =  2,
+    !              KSP_CONVERGED_ATOL               =  3,
+    !              KSP_CONVERGED_ITS                =  4,
+    !              KSP_CONVERGED_CG_NEG_CURVE       =  5,
+    !              KSP_CONVERGED_CG_CONSTRAINED     =  6,
+    !              KSP_CONVERGED_STEP_LENGTH        =  7,
+    !              KSP_CONVERGED_HAPPY_BREAKDOWN    =  8,
+    !              /* diverged */
+    !              KSP_DIVERGED_NULL                = -2,
+    !              KSP_DIVERGED_ITS                 = -3,
+    !              KSP_DIVERGED_DTOL                = -4,
+    !              KSP_DIVERGED_BREAKDOWN           = -5,
+    !              KSP_DIVERGED_BREAKDOWN_BICG      = -6,
+    !              KSP_DIVERGED_NONSYMMETRIC        = -7,
+    !              KSP_DIVERGED_INDEFINITE_PC       = -8,
+    !              KSP_DIVERGED_NAN                 = -9,
+    !              KSP_DIVERGED_INDEFINITE_MAT      = -10,
+    ! 
+    !              KSP_CONVERGED_ITERATING          =  0} KSPConvergedReason;
+    !
   END SUBROUTINE DescribeDivergedReason
-
-END MODULE LinearSolverPetscModule
+  ! ====================================================   END:  DescribeDivergedReason

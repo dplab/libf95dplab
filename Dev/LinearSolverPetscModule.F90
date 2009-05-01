@@ -1,8 +1,8 @@
 !  $Id$
 !
-MODULE LinearSolverPetscModule 
+MODULE LinearSolverPETScModule 
   !
-  !  This module interfaces the Petsc solver with our
+  !  This module interfaces the PETSc solver with our
   !  parallel finite element codes.
   !
   !
@@ -28,6 +28,10 @@ MODULE LinearSolverPetscModule
   INTEGER,          PARAMETER :: PREALLOCATION_FACTOR = 4 ! for estimating DOF per row
   DOUBLE PRECISION, PARAMETER :: DEFAULT_ERROR_TOL = 1.0d-12
   !
+  ! ========== Return Values
+  !
+  INTEGER, PARAMETER :: RETURN_SUCCESS = 0, RETURN_FAILURE = 1  ! generic errors
+  !
   ! ==================== Types
   !
   !  Helper type for connectivity and bcs.
@@ -48,13 +52,10 @@ MODULE LinearSolverPetscModule
     Vec :: x, b, x0, ax0
     Mat :: A
     !
-    !  Both arrays 'localsizes' and 'section_beg' are 0-based on 
-    !  the number of processes.  The array 'localsizes' gives number 
-    !  of DOF for each process; the array 'section_beg' gives the 1-based 
-    !  index of the first DOF on each process.
+    !  l_numDOF -- number of DOF on this (local) process
+    !  g_num0   -- starting (global) node number [1-based]
     !
-    INTEGER, ALLOCATABLE :: localsizes(:)  ! (numprocs, MAXSYS) 
-    INTEGER, ALLOCATABLE :: section_beg(:) ! (numprocs, MAXSYS) 
+    INTEGER :: l_numDOF, g_num0
     !
     Type(SystemConn) :: sysConn
     LOGICAL          :: symmetry = DFLT_SYMMETRY
@@ -63,7 +64,7 @@ MODULE LinearSolverPetscModule
   !
   ! ==================== Module Data
   !
-  LOGICAL :: PetscInitialized = .FALSE.
+  LOGICAL :: PETScInitialized = .FALSE.
   !
   !
   !  Module variables.
@@ -79,7 +80,7 @@ MODULE LinearSolverPetscModule
   KSPConvergedReason reason
   PetscViewer viewer
   !
-  !  Petsc items.
+  !  PETSc items.
   !
   INTEGER :: numprocs = 0, myrank = -1
   !
@@ -94,6 +95,7 @@ MODULE LinearSolverPetscModule
   ! ========== Data
   !
   PUBLIC :: numprocs, myrank
+  PUBLIC :: RETURN_SUCCESS, RETURN_FAILURE
   !
   ! numprocs -- number of processes
   ! myrank   -- rank of current process (myid in parallel_mod)
@@ -108,12 +110,12 @@ MODULE LinearSolverPetscModule
   !
 CONTAINS ! ================================================== Module Procedures
   !
-  ! ==================================================== BEGIN:  LinearSolverPetscInit
-  SUBROUTINE LinearSolverPetscInit(status)
+  ! ==================================================== BEGIN:  LinearSolverPETScInit
+  SUBROUTINE LinearSolverPETScInit(status)
     !
     !  Module initialization.  
     !
-    !  Call PetscInitialize and determine number of processes and rank.
+    !  Call PETScInitialize and determine number of processes and rank.
     !
     !  Don't forget to call PetscFinalize at the end of the program.
     !
@@ -134,11 +136,12 @@ CONTAINS ! ================================================== Module Procedures
     call MPI_Comm_size(PETSC_COMM_WORLD, numprocs,ierr)
     call MPI_Comm_rank(PETSC_COMM_WORLD, myrank,  ierr)
     !
-    PetscInitialized = .TRUE.
+    PETScInitialized = .TRUE.
     !
-  END SUBROUTINE LinearSolverPetscInit
-  ! ====================================================   END:  LinearSolverPetscInit
+  END SUBROUTINE LinearSolverPETScInit
+  ! ====================================================   END:  LinearSolverPETScInit
   ! ==================================================== BEGIN:  LinearSolverCreate
+  !
   SUBROUTINE LinearSolverCreate(self, conn, bcnodes, locsizes, SYMM)
     !
     !  Create an instance of a linear solver.
@@ -179,8 +182,8 @@ CONTAINS ! ================================================== Module Procedures
     !
     !  Initialize module, if not already.
     !
-    IF (.NOT. PetscInitialized) THEN
-      CALL LinearSolverPetscInit()
+    IF (.NOT. PETScInitialized) THEN
+      CALL LinearSolverPETScInit()
     END IF
     !
     !  Set status.
@@ -256,55 +259,63 @@ CONTAINS ! ================================================== Module Procedures
     call VecDuplicate(self % x, self % ax0, IERR)
     !
   END SUBROUTINE LinearSolverCreate
-  ! ==================================================== LinearSolverCreate:  END
   !
-  SUBROUTINE LinearSolverPetscSolve(sysid, sol, emats, &
+  ! ==================================================== LinearSolverCreate:  END
+  ! ==================================================== BEGIN:  LinearSolverSolve
+  !
+  SUBROUTINE LinearSolverSolve(sol, eMats,&
        &   ERHS, ARHS, &
        &   BCVALS, SOL_GLOBAL, STATUS)
     !
-    !  ***  Description:  
+    !  Solve a linear system using PETSc routines.
     !
-    !  Solve linear system using Petsc routines.
+    ! ========== Arguments
     !
-    !  *** Argument Declarations:
+    !  .     REQUIRED ARGS
+    !  sol   -- the local solution vector (section on this process)
+    !  eMats -- the local elemental stiffness matrices
     !
-    !  sysid -- system identifier
-    !
-    INTEGER, INTENT(IN) :: sysid
-    !
-    !  sol -- the local solution vector (section on this process)
+    !  .     OPTIONAL ARGS
+    !  ERHS       -- the local elemental right-hand sides
+    !  ARHS       -- assembled right-hand side (1-based array);
+    !             -- mutually exclusive with ERHS
+    !  BCVALS     -- boundary values to enforce (usually nonzero)
+    !  SOL_GLOBAL -- global solution vector
+    !  STATUS     -- return value; convergence status from PetSc
     !
     DOUBLE PRECISION, INTENT(INOUT) :: sol(:)
-    !
-    !  emats -- the local elemental stiffness matrices
-    !
-    DOUBLE PRECISION, INTENT(IN) :: emats(:, :, :)
-    !
-    !  erhs -- the local elemental right-hand sides
-    !
+    DOUBLE PRECISION, INTENT(IN)    :: emats(:, :, :)
     DOUBLE PRECISION, INTENT(IN), OPTIONAL :: ERHS(:, :)
-    !
-    !  arhs -- assembled right-hand side (1-based array)
-    !
     DOUBLE PRECISION, INTENT(IN), OPTIONAL :: ARHS(:)
-    !
-    !  NOTE:  One of 'erhs' or 'arhs' must be present, but not both.
-    !
-    !  bcvals -- boundary values to enforce (usually nonzero)
-    !
     DOUBLE PRECISION, INTENT(IN), OPTIONAL :: BCVALS(:)
-    !
-    !  SOL_GLOBAL -- global solution vector
-    !
     DOUBLE PRECISION, INTENT(OUT), OPTIONAL :: SOL_GLOBAL(:)
-    !
-    !  STATUS -- return value; convergence status from PetSc
     !
     INTEGER, INTENT(OUT), OPTIONAL :: STATUS
     !
+    ! ========== Locals
     !
-    !--------------Locals------------------------------------------------------
+    INTEGER 
     !
+    ! ================================================== Executable Code
+    !
+    if (.NOT. PRESENT(ERHS) .AND. .NOT. PRESENT(ARHS)) then 
+      ! Neither are present.
+
+      IF (PRESENT(STATUS)) THEN
+        STATUS = RETURN_FAILURE
+      END IF
+
+      RETURN ! Error status
+    end if
+
+    !
+  END SUBROUTINE LinearSolverSolve
+  !
+  ! ====================================================   END:  LinearSolverSolve
+  !
+  SUBROUTINE LinearSolverPETScSolve(&
+       !--------------Locals------------------------------------------------------
+       !
     INTEGER :: ierr, dofpe, elmin, elmax, numbc
     INTEGER :: elem, node, its, ibc, vecsize, i, iproc
     INTEGER, POINTER :: bcn(:)
@@ -322,10 +333,6 @@ CONTAINS ! ================================================== Module Procedures
     !
     !--------------*-------------------------------------------------------
     !
-    if (.NOT. PRESENT(ERHS) .AND. .NOT. PRESENT(ARHS)) then 
-      ! Neither are present.
-      RETURN ! Error status
-    end if
     !
     !  Form right hand side according to input options.
     !
@@ -448,54 +455,43 @@ CONTAINS ! ================================================== Module Procedures
       !
     endif
     !
-  END SUBROUTINE LinearSolverPetscSolve
+  END SUBROUTINE LinearSolverPETScSolve
   !
-  !  *** Program Unit:  private subroutine
-  !  ***    Unit Name:  BFromARHS
+  ! ==================================================== BEGIN:  SetBfromARHS
   !
-  !  *** Unit Declaration: 
-  !
-  SUBROUTINE BFromARHS(sysid, rhs)
+  SUBROUTINE SetBfromARHS(self, arhs)
     !
-    !  ***  Description:  
+    !  Set the PETSc right-hand side, b, from assembled RHS, arhs.
     !
-    !  Compute `b(sysid)' from assembled right-hand side.
-    !  
+    ! ========== Arguments
     !
-    !  *** Argument Declarations:
+    !  .     REQUIRED ARGS
+    !  self -- the LinearSolver instance
+    !  arhs -- assembled right-hand side (1-based array)
     !
-    INTEGER, INTENT(IN) :: sysid
+    !  .     OPTIONAL ARGS (none yet)
     !
-    !  sysid -- system identifier
+    TYPE(LinearSolverType), INTENT(IN OUT) :: self
+    DOUBLE PRECISION, INTENT(IN)           :: rhs(:)
     !
-    DOUBLE PRECISION, INTENT(IN) :: rhs(:)
+    ! ========== Locals
     !
-    !  rhs -- assembled right-hand side (1-based array)
+    INTEGER :: i, n, ierr
     !
-    !  *** End:
+    ! ================================================== Executable Code
     !
-    !  *** Locals:
-    !
-    INTEGER :: i, ierr
-    !
-    !--------------*-------------------------------------------------------
-    !
-    do i=1, localsizes(myrank, sysid)
-      call VecSetValues(b(sysid), &
-           &  1, section_beg(myrank, sysid) + i - 2, rhs(i), &
-           &  INSERT_VALUES, ierr)
+    do i=1, self % l_numDOF
+      n = self % g_num0 + i - 2
+      call VecSetValues( self % b, 1, n, arhs(i), INSERT_VALUES, IERR)
     end do
     !
-    call VecAssemblyBegin(b(sysid), ierr)
-    call VecAssemblyEnd  (b(sysid), ierr)
+    call VecAssemblyBegin(self % b, IERR)
+    call VecAssemblyEnd  (self % b, IERR)
     !
-  END SUBROUTINE BFromARHS
+  END SUBROUTINE SetBfromARHS
   !
-  !  *** Program Unit:  private subroutine
-  !  ***    Unit Name:  BFromERHS
-  !
-  !  *** Unit Declaration: 
-  !
+  ! ====================================================   END:  SetBfromARHS
+
   SUBROUTINE BFromERHS(sysid, erhs, USE_ALL_DOF)
     !
     !  ***  Description:  
@@ -623,7 +619,7 @@ CONTAINS ! ================================================== Module Procedures
 
     if (APPLY_BCS) then
       !
-      !  Negative DOF number is ignored by Petsc.
+      !  Negative DOF number is ignored by PETSc.
       !
       do elem=elmin, elmax
         call MatSetValues(A(sysid), &
@@ -689,7 +685,7 @@ CONTAINS ! ================================================== Module Procedures
     !
     !--------------*-------------------------------------------------------
     !
-    !--------------* Form Petsc solver context.
+    !--------------* Form PETSc solver context.
     !
     CALL KSPCreate(PETSC_COMM_WORLD, ksp, ierr)
     !
@@ -811,3 +807,5 @@ CONTAINS ! ================================================== Module Procedures
     !
   END SUBROUTINE DescribeDivergedReason
   ! ====================================================   END:  DescribeDivergedReason
+
+END MODULE LinearSolverPETScModule

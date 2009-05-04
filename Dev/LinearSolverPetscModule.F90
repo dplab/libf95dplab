@@ -229,6 +229,10 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
     !  This makes the connectivity negative for nodes with BCs.
     !  These are then ignored by PETSc. [checked 2009-04-30, see MatSetValues docs]
     !
+    !  NOTE:  I multiply the 1-based node numbers by -1 for nodes WITH BCs and then
+    !         subtract one from all node numbers to make the resulting list  0-based.  
+    !         Subtracting one before changing sign does not work properly for node 1(0).
+    !
     bcsign = 1
     bcsign(bcnodes) = -1
     sysconn % sconn = conn*&
@@ -472,7 +476,7 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
     !  .     OPTIONAL ARGS (none yet)
     !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
-    DOUBLE PRECISION, INTENT(IN)           :: rhs(:)
+    DOUBLE PRECISION,       INTENT(IN)     :: arhs(:)
     !
     ! ========== Locals
     !
@@ -481,8 +485,8 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
     ! ================================================== Executable Code
     !
     do i=1, self % l_numDOF
-      n = self % g_num0 + i - 2
-      call VecSetValues( self % b, 1, n, arhs(i), INSERT_VALUES, IERR)
+      n = self % g_num0 + i - 2  ! make 0-based
+      CALL VecSetValues( self % b, 1, n, arhs(i), INSERT_VALUES, IERR)
     end do
     !
     call VecAssemblyBegin(self % b, IERR)
@@ -491,85 +495,88 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
   END SUBROUTINE SetBfromARHS
   !
   ! ====================================================   END:  SetBfromARHS
-
-  SUBROUTINE BFromERHS(sysid, erhs, USE_ALL_DOF)
+  ! ==================================================== BEGIN:  SetBfromERHS
+  !
+  SUBROUTINE SetBfromERHS(self Erhs, USE_ALL_DOF)
     !
-    !  ***  Description:  
+    !  Set the PETSc right-hand side from elemental right-hand sides.
     !
-    !  Compute `b(sysid)' from elemental right-hand sides.
-    !  This appends to existing values.
+    !  NOTES:  
     !
-    !  *** Argument Declarations:
+    !  *  This appends to existing values.
+    !  *  CHECK THIS:  assembles all nodes in both cases, but only applies
+    !     BCs if USE_ALL_DOF is false.
     !
-    INTEGER, INTENT(IN) :: sysid
+    ! ========== Arguments
     !
-    !  sysid -- system identifier
-    !
-    DOUBLE PRECISION, INTENT(IN) :: erhs(:, :)
-    !
-    !  erhs -- elemental right-hand side (references a 1-based array)
-    !
-    LOGICAL, INTENT(IN) :: USE_ALL_DOF
-    !
+    !  .     REQUIRED ARGS
+    !  self -- the LinearSolverType
+    !  Erhs -- elemental right-hand side (references a 1-based array)
     !  USE_ALL_DOF -- flag to assemble all DOF regardless of BC
     !
-    !  *** End:
+    !  .     OPTIONAL ARGS
     !
-    !  *** Locals:
+    TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
-    INTEGER :: i, ierr, dofpe, elem, elmin, elmax, numbc
+    DOUBLE PRECISION, INTENT(IN) :: Erhs(:, :)
+    LOGICAL, INTENT(IN) :: USE_ALL_DOF
+    !
+    ! ========== Locals
+    !
+    INTEGER :: dofpe, elem, elmin, elmax, numbc, IERR
     INTEGER, POINTER :: sconn(:, :), bcn(:)
     !
-    !--------------*-------------------------------------------------------
+    ! ================================================== Executable Code
     !
     dofpe = SIZE  (erhs, 1)
     elmin = LBOUND(erhs, 2)
     elmax = UBOUND(erhs, 2)
     !
-    sconn => sysconn(sysid)%sconn
-    bcn   => sysconn(sysid)%bcs
+    sconn => self % sysconn % sconn
+    bcn   => self % sysconn % bcs
     numbc = SIZE(bcn, 1)
     !
-    !  NOTE:  2009-02-20
-    !
-    !  * Fixed second VecSetValues call, which had negative entries in sconn
-    !  * Use "abs(1 + sconn) - 1", since 1 is subtracted from connectivity,
-    !    even from negative values (BCs)
-    !
     if (USE_ALL_DOF) then
+      !
+      !  Assemble all nodes, regardless of applied BCs.
+      !
       do elem=elmin, elmax
-        call VecSetValues(b(sysid), dofpe, abs(1 + sconn(:, elem)) - 1, &
+        call VecSetValues(self % b, dofpe, abs(1 + sconn(:, elem)) - 1, &
              &  erhs(:, elem), &
-             &  ADD_VALUES, ierr)
+             &  ADD_VALUES, IERR)
       end do
       !
-      call VecAssemblyBegin(b(sysid), ierr)
-      call VecAssemblyEnd  (b(sysid), ierr)
+      call VecAssemblyBegin(self % b, IERR)
+      call VecAssemblyEnd  (self % b, IERR)
       !
     else
+      !
+      !  Only assemble nodes without applied BCs.
+      !
       do elem=elmin, elmax
-        call VecSetValues(b(sysid), dofpe, abs(1 + sconn(:, elem)) - 1, &
+        call VecSetValues(self % b, dofpe, abs(1 + sconn(:, elem)) - 1, &
              &  erhs(:, elem), &
-             &  ADD_VALUES, ierr)
+             &  ADD_VALUES, IERR)
         !
       end do
       !
-      call VecAssemblyBegin(b(sysid), ierr)
-      call VecAssemblyEnd  (b(sysid), ierr)
+      call VecAssemblyBegin(self % b, IERR)
+      call VecAssemblyEnd  (self % b, IERR)
       !
       if (myrank == 0) then
-        CALL VecSetValues(b(sysid), numbc, bcn, &
+        CALL VecSetValues(self % b, numbc, bcn, &
              &  SPREAD(0.0d0, DIM=1, NCOPIES=numbc), &
-             &  INSERT_VALUES, ierr)
+             &  INSERT_VALUES, IERR)
       end if
       !
-      call VecAssemblyBegin(b(sysid), ierr)
-      call VecAssemblyEnd  (b(sysid), ierr)
+      call VecAssemblyBegin(self % b, IERR)
+      call VecAssemblyEnd  (self % b, IERR)
       !
     end if
     !
-  END SUBROUTINE BFromERHS
+  END SUBROUTINE SetBfromERHS
   !
+  ! ====================================================   END:  SetBfromERHS
   ! ==================================================== BEGIN:  FormA
   !
   SUBROUTINE FormA(self, emats, APPLY_BCS)
@@ -649,18 +656,6 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
   END SUBROUTINE FormA
   !
   ! ====================================================   END:  FormA
-  !
-  SUBROUTINE FormA()
-    !
-    !--------------*-------------------------------------------------------
-    !
-  END SUBROUTINE FormA
-  !
-  !  *** Program Unit:  private subroutine
-  !  ***    Unit Name:  SolveSystem
-  !
-  !  *** Unit Declaration: 
-  !
   SUBROUTINE SolveSystem(sysid, STATUS)
     !
     !  ***  Description:  

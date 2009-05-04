@@ -570,49 +570,41 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
     !
   END SUBROUTINE BFromERHS
   !
-  !  *** Program Unit:  private subroutine
-  !  ***    Unit Name:  FormA
+  ! ==================================================== BEGIN:  FormA
   !
-  !  *** Unit Declaration: 
-  !
-  SUBROUTINE FormA(sysid, emats, APPLY_BCS)
+  SUBROUTINE FormA(self, emats, APPLY_BCS)
     !
-    !  ***  Description:  
+    !  Form PETSc matrix.
     !
-    !  Form A(sysid) from the elemental matrices.
+    ! ========== Arguments
     !
-    !  *** Argument Declarations:
+    !  .     REQUIRED ARGS
+    !  self  -- the LinearSolver instance
+    !  eMats -- elemental matrices
+    !  APPLY_BCS -- flag for applying boundary conditions
+    !            -- if true, set up the matrix for applied boundary conditions;
+    !            -- otherwise, assemble the matrix for all degrees of freedom.
     !
-    INTEGER, INTENT(IN) :: sysid
+    !  .     OPTIONAL ARGS
     !
-    !  sysid -- system identifier
+    TYEP(LinearSolverType), INTENT(IN OUT) :: self
     !
     DOUBLE PRECISION, INTENT(IN) :: emats(:, :, :)
-    !
-    !  emats -- the local elemental stiffness matrices
-    !
     LOGICAL, INTENT(IN) :: APPLY_BCS
     !
-    !  APPLY_BCS -- flag for applying boundar conditions
+    ! ========== Locals
     !
-    !  If true, set up the matrix for applied boundary conditions;
-    !  otherwise, assemble the matrix for all degrees of freedom.
+    INTEGER :: dofpe, elem, elmin, elmax, numbc, ibc, IERR
+    INTEGER, POINTER :: sconn(:, :), bcn(:) ! pointers to strucutre components
     !
-    !  *** End:
-    !
-    !  *** Locals:
-    !
-    INTEGER :: dofpe, elem, elmin, elmax, numbc, ibc, ierr
-    INTEGER, POINTER :: sconn(:, :), bcn(:)
-    !
-    !--------------*-------------------------------------------------------
+    ! ================================================== Executable Code
     !
     dofpe = SIZE(emats, 1)
     elmin = LBOUND(emats, 3)
     elmax = UBOUND(emats, 3)
     !
-    sconn => sysconn(sysid)%sconn
-    bcn   => sysconn(sysid)%bcs
+    sconn => self % sysconn % sconn
+    bcn   => self % sysconn % bcs
     numbc = SIZE(bcn, 1)
 
     call MatZeroEntries(A(sysid), ierr)
@@ -622,19 +614,22 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
       !  Negative DOF number is ignored by PETSc.
       !
       do elem=elmin, elmax
-        call MatSetValues(A(sysid), &
+        call MatSetValues(self % A, &
              &   dofpe, sconn(:, elem),&
              &   dofpe, sconn(:, elem),&
-             &   TRANSPOSE(emats(:, :, elem)), ADD_VALUES, ierr)
+             &   TRANSPOSE(emats(:, :, elem)), ADD_VALUES, IERR)
       end do
+      !
+      !  Only one process need apply the BCs.
       !
       if (myrank == 0) then
         do ibc=1, numbc
-          call MatSetValues(A(sysid), &
+          call MatSetValues(self % A, &
                &  1, bcn(ibc), 1, bcn(ibc), &
                &  1.0d0, ADD_VALUES, ierr)
         end do
       end if
+      !
     else
       !
       !  Use absolute value of connectivity to ensure
@@ -644,12 +639,20 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
         call MatSetValues(A(sysid), &
              &   dofpe, ABS(1 + sconn(:, elem)) - 1,&
              &   dofpe, ABS(1 + sconn(:, elem)) - 1,&
-             &   TRANSPOSE(emats(:, :, elem)), ADD_VALUES, ierr)
+             &   TRANSPOSE(emats(:, :, elem)), ADD_VALUES, IERR)
       end do
     endif
     !
-    call MatAssemblyBegin(A(sysid),MAT_FINAL_ASSEMBLY,ierr)
-    call MatAssemblyEnd  (A(sysid),MAT_FINAL_ASSEMBLY,ierr)
+    call MatAssemblyBegin(self % A, MAT_FINAL_ASSEMBLY, IERR)
+    call MatAssemblyEnd  (self % A, MAT_FINAL_ASSEMBLY, IERR)
+    !
+  END SUBROUTINE FormA
+  !
+  ! ====================================================   END:  FormA
+  !
+  SUBROUTINE FormA()
+    !
+    !--------------*-------------------------------------------------------
     !
   END SUBROUTINE FormA
   !

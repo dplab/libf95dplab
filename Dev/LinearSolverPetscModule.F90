@@ -5,6 +5,9 @@ MODULE LinearSolverPETScModule
   !  This module interfaces the PETSc solver with our
   !  parallel finite element codes.
   !
+  !  NOTES:
+  !
+  ! * Max iterations for a system is set to twice the total degrees of freedom.
   !
   USE IntrinsicTypesModule,  RK=>REAL_KIND, IK=>INTEGER_KIND, LK=>LOGICAL_KIND
   !
@@ -47,6 +50,8 @@ MODULE LinearSolverPETScModule
   !
   TYPE LinearSolverType
     !
+    CHARACTER(LEN=64) :: name
+    !
     !  PETSc types
     !
     Vec :: x, b, x0, ax0
@@ -60,33 +65,24 @@ MODULE LinearSolverPETScModule
     Type(SystemConn) :: sysConn
     LOGICAL          :: symmetry = DFLT_SYMMETRY
     !
+    !  Various settings for PETSc solvers.
+    !
+    DOUBLE PRECISION :: error_tol = DEFAULT_ERROR_TOL
+    INTEGER          :: maxits
+    !
   END TYPE LinearSolverType
   !
   ! ==================== Module Data
   !
   LOGICAL :: PETScInitialized = .FALSE.
   !
-  !
-  !  Module variables.
-  !
-  LOGICAL :: sys_used(MAXSYS) = .FALSE.
-  DOUBLE PRECISION :: error_tol = DEFAULT_ERROR_TOL
-
-  !
-  KSP         ksp
-  KSPType     ksptype
-  PC          pc
-  PCType      ptype
-  KSPConvergedReason reason
-  PetscViewer viewer
-  !
-  !  PETSc items.
-  !
-  INTEGER :: numprocs = 0, myrank = -1
-  !
   !  Empty array for passing as unused argument.
   !
   DOUBLE PRECISION :: NULL2D(0, 0)
+  !
+  !  PETSc/Parallel items.
+  !
+  INTEGER :: numprocs = 0, myrank = -1
   !
   ! ==================== Public Entities
   !
@@ -108,7 +104,7 @@ MODULE LinearSolverPETScModule
   !
   PUBLIC :: LinearSolverCreate
   !
-CONTAINS ! ====================================================  MODULE PROCEDURES
+CONTAINS ! ============================================= MODULE PROCEDURES
   !
   ! ==================================================== BEGIN:  LinearSolverPETScInit
   SUBROUTINE LinearSolverPETScInit(status)
@@ -142,13 +138,25 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
   ! ====================================================   END:  LinearSolverPETScInit
   ! ==================================================== BEGIN:  LinearSolverCreate
   !
-  SUBROUTINE LinearSolverCreate(self, conn, bcnodes, locsizes, SYMM)
+  SUBROUTINE LinearSolverCreate(self, name, conn, bcnodes, locsizes, SYMM)
     !
     !  Create an instance of a linear solver.
     !
     ! ========== Arguments
     !
+    !  name     -- the name of the linear system (for messages)
+    !  locsizes -- number of degrees of freedom on each processor
+    !  conn     -- 1-based connectivity section (for DOF's of the system)
+    !           -- each process passes some section of the connectivity
+    !  bcnodes  -- 1-based global list of DOF numbers with essential BC's
+    !           -- each process needs to pass the complete list of DOF numbers.
+    !  locsizes -- number of degrees of freedom on each processor
+    !  SYMM     -- symmetric system indicator (optional) 
+    !  status   -- return value (optional):  0 for success (not used at the moment)
+    !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
+    !
+    CHARACTER(LEN=*), INTENT(IN) :: name
     !
     INTEGER, INTENT(IN) :: conn(:, :)
     INTEGER, INTENT(IN) :: bcnodes(:)
@@ -156,20 +164,6 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
     LOGICAL, INTENT(IN), OPTIONAL :: SYMM
     !
     INTEGER, INTENT(OUT), OPTIONAL :: STATUS
-    !
-    !  locsizes -- number of degrees of freedom on each processor
-    !
-    !  conn     -- 1-based connectivity section (for DOF's of the system)
-    !           -- each process passes some section of the connectivity
-    !
-    !  bcnodes  -- 1-based global list of DOF numbers with essential BC's
-    !           -- each process needs to pass the complete list of DOF numbers.
-    !
-    !  locsizes -- number of degrees of freedom on each processor
-    !
-    !  SYMM     -- symmetric system indicator (optional) 
-    !
-    !  status   -- return value (optional):  0 for success (not used at the moment)
     !
     ! ========== Locals
     !
@@ -192,7 +186,9 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
       STATUS = 0
     END IF
     !
-    !  Set symmetry.
+    !  Name and symmetry.
+    !
+    self % name = name
     !
     IF (PRESENT(SYMMETRY)) THEN
       self % symmetry = SYMMETRY
@@ -261,6 +257,10 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
     call VecDuplicate(self % x, self % b, IERR)
     call VecDuplicate(self % x, self % x0, IERR)
     call VecDuplicate(self % x, self % ax0, IERR)
+    !
+    ! ========== Other parameters
+    !
+    self % maxits = 2 * ndof_glo
     !
   END SUBROUTINE LinearSolverCreate
   !
@@ -656,79 +656,100 @@ CONTAINS ! ====================================================  MODULE PROCEDUR
   END SUBROUTINE FormA
   !
   ! ====================================================   END:  FormA
-  SUBROUTINE SolveSystem(sysid, STATUS)
+  ! ==================================================== BEGIN:  SolveSystem
+  !
+  SUBROUTINE SolveSystem(self, STATUS)
     !
-    !  ***  Description:  
-    !
-    !  Solve the system A(sysid)*x(sysid) = b(sysid)
+    !  Solve the PETSc system.
     !
     !  A and b are already constructed.  Currently this
     !  only used Jacobi preconditioner.
     !
-    !  *** Argument Declarations:
+    ! ========== Arguments
     !
-    !  sysid -- system identifier
+    !  .     REQUIRED ARGS
+    !  self -- the LinearSolverType 
     !
-    INTEGER, INTENT(IN) :: sysid
-    !
+    !  .     OPTIONAL ARGS
     !  STATUS -- return value 
+    !
+    TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
     INTEGER, INTENT(OUT), OPTIONAL :: STATUS
     !
-    !  *** End:
+    ! ========== Locals
     !
-    !  *** Locals:
+    !  PETSc objects.
     !
-    INTEGER :: ierr, its, maxits
+    KSP         ksp
+    KSPType     ksptype
+    PC          pc
+    PCType      ptype
     !
-    !--------------*-------------------------------------------------------
+    KSPConvergedReason reason
+    !PetscViewer viewer 
     !
-    !--------------* Form PETSc solver context.
+    INTEGER :: IERR, its
     !
-    CALL KSPCreate(PETSC_COMM_WORLD, ksp, ierr)
+    ! ================================================== Executable Code
     !
-    call KSPSetOperators(ksp, A(sysid), A(sysid), &
-         &  DIFFERENT_NONZERO_PATTERN, ierr)
     !
-    !  Set solver and preconditioner options.
+    !  Form PETSc solver context.
     !
-    if (SYMMETRY(sysid)) then
+    CALL KSPCreate(PETSC_COMM_WORLD, ksp, IERR)
+    call KSPSetOperators(ksp, self % A, self % A, DIFFERENT_NONZERO_PATTERN, IERR)
+    !
+    !
+    !  Set PETSc options.
+    !
+    !  . ksptype (Krylov space method)
+    !
+    if (self % symmetry) then
       ksptype = KSPCG
     else
       ksptype = KSPBICG
     end if
-    call KSPSetType(ksp, ksptype, ierr)
+    call KSPSetType(ksp, ksptype, IERR)
     !
+    !  . pctype (Preconditioner)
+    ! 
     ptype = PCJACOBI
-    CALL KSPGetPC(ksp, pc, ierr)
-    call PCSetType(pc, ptype, ierr)
+    CALL KSPGetPC(ksp, pc, IERR)
+    call PCSetType(pc, ptype, IERR)
     !
-    maxits = 2*(section_beg(numprocs - 1, sysid) + localsizes(numprocs - 1, sysid))
-    call KSPSetTolerances(ksp, error_tol, &
+    ! . error tolerance
+    !
+    call KSPSetTolerances(ksp, self % error_tol, &
          &   PETSC_DEFAULT_DOUBLE_PRECISION,&
          &   PETSC_DEFAULT_DOUBLE_PRECISION, &
-         &   maxits, ierr)
+         &   self % maxIts, IERR)
+    !
+    !  . command line options
+    !
+    CALL KSPSetFromOptions(ksp, IERR)
+    !
+    !  Solve system and check result.
+    !
+    CALL KSPSetUp(ksp, IERR)
+    call KSPSolve(ksp, self % b, self % x, IERR) ! solve!
 
-    CALL KSPSetFromOptions(ksp, ierr)
-    CALL KSPSetUp(ksp, ierr)
-    call KSPSolve(ksp, b(sysid), x(sysid), ierr) ! solve!
-
-    call KSPGetConvergedReason(ksp, reason, ierr)
-    CALL KSPGetIterationNumber(ksp, its, ierr)
-    PRINT *, '   PETSc results:  sysid/its/reason: ', sysid, its, reason
+    call KSPGetConvergedReason(ksp, reason, IERR)
+    CALL KSPGetIterationNumber(ksp, its, IERR)
+    !
+    PRINT *, 'Linear system '//TRIM(ADJUSTL(self % name))// ':  iterations ', its, , ', code ', reason
+    IF (reason < 0) THEN
+      CALL DescribeDivergedReason(0, reason)
+    END IF
     !
     if (PRESENT(STATUS)) then
       STATUS = reason
-      IF (reason < 0) THEN
-        CALL DescribeDivergedReason(6, reason)
-      END IF
     end if
     !
-    call KSPDestroy(ksp,ierr)
-
+    call KSPDestroy(ksp, IERR)
     !
   END SUBROUTINE SolveSystem
   !
+  ! ====================================================   END:  SolveSystem
   ! ==================================================== BEGIN:  DescribeDivergedReason
   SUBROUTINE DescribeDivergedReason(u, reason)
     !

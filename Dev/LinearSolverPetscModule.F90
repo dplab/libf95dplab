@@ -102,14 +102,14 @@ MODULE LinearSolverPETScModule
   !
   ! ========== Procedures
   !
-  PUBLIC :: LinearSolverCreate
+  PUBLIC :: LinearSolverCreate, LinearSolverSolve
   !
 CONTAINS ! ============================================= MODULE PROCEDURES
   !
   ! ==================================================== BEGIN:  LinearSolverPETScInit
   SUBROUTINE LinearSolverPETScInit(status)
     !
-    !  Module initialization.  
+    !  Module initialization.  (PRIVATE)
     !
     !  Call PETScInitialize and determine number of processes and rank.
     !
@@ -117,9 +117,9 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! ========== Arguments
     !
-    INTEGER, INTENT(OUT) :: status
-    !
     !  status -- return value:  0 for success
+    !
+    INTEGER, INTENT(OUT) :: status
     !
     ! ========== Locals
     !
@@ -273,6 +273,10 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     !  Solve a linear system using PETSc routines.
     !
+    !  This can be called with both RHS args, e.g.  ERHS and ARHS, 
+    !  as in isaiah/vplas().  BCVALS are optional in the sense that
+    !  they are set to zero if not explicitly passed.
+    !
     ! ========== Arguments
     !
     !  .     REQUIRED ARGS
@@ -287,42 +291,151 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  SOL_GLOBAL -- global solution vector
     !  STATUS     -- return value; convergence status from PetSc
     !
-    DOUBLE PRECISION, INTENT(INOUT) :: sol(:)
-    DOUBLE PRECISION, INTENT(IN)    :: emats(:, :, :)
-    DOUBLE PRECISION, INTENT(IN), OPTIONAL :: ERHS(:, :)
-    DOUBLE PRECISION, INTENT(IN), OPTIONAL :: ARHS(:)
-    DOUBLE PRECISION, INTENT(IN), OPTIONAL :: BCVALS(:)
+    DOUBLE PRECISION, INTENT(IN OUT) :: sol(:)
+    DOUBLE PRECISION, INTENT(IN)     :: emats(:, :, :)
+    !
+    DOUBLE PRECISION, INTENT(IN),  OPTIONAL :: ERHS(:, :)
+    DOUBLE PRECISION, INTENT(IN),  OPTIONAL :: ARHS(:)
+    DOUBLE PRECISION, INTENT(IN),  OPTIONAL :: BCVALS(:)
     DOUBLE PRECISION, INTENT(OUT), OPTIONAL :: SOL_GLOBAL(:)
     !
     INTEGER, INTENT(OUT), OPTIONAL :: STATUS
     !
     ! ========== Locals
     !
-    INTEGER 
+    INTEGER :: IERR, numbc, mySTATUS
+    INTEGER, POINTER :: bcn(:)
     !
     ! ================================================== Executable Code
     !
-    if (.NOT. PRESENT(ERHS) .AND. .NOT. PRESENT(ARHS)) then 
-      ! Neither are present.
-
-      IF (PRESENT(STATUS)) THEN
-        STATUS = RETURN_FAILURE
-      END IF
-
-      RETURN ! Error status
-    end if
-
+    CALL SetStatus(RETURN_SUCCESS)
     !
-  END SUBROUTINE LinearSolverSolve
-  !
-  ! ====================================================   END:  LinearSolverSolve
-  !
-  SUBROUTINE LinearSolverPETScSolve(&
-       !--------------Locals------------------------------------------------------
-       !
-    INTEGER :: ierr, dofpe, elmin, elmax, numbc
+    IF (.NOT. PRESENT(ERHS) .AND. .NOT. PRESENT(ARHS)) THEN 
+      ! Neither are present.
+      CALL SetStatus(RETURN_FAILURE);  RETURN
+    END IF
+    !
+    ! ========== Form RHS
+    !
+    !  . If portion is assembled already, set to that; otherwise zero.
+    !
+    if (PRESENT(arhs)) then
+      !
+      call SetBFromARHS(self, arhs)
+    else 
+      !
+      call VecSet   (self % b, 0.0d0, IERR)
+      call VecAssemblyBegin(self % b, IERR)
+      call VecAssemblyEnd  (self % b, IERR)
+      !
+    end if
+    ! 
+    !  . Add in unassembled contribution
+    !  -- if nonzero BCs, do not ignore contributions of those nodes, since
+    !     they will be backsolved
+    !
+    IF (PRESENT(ERHS)) THEN
+      CALL BFromERHS(self, ERHS, USE_ALL_DOF=PRESENT(BCVALS))
+    END IF
+    !
+    ! ========== Handle BCs
+    !
+    !  Nonhomogeneous BCs are handled by creating a RHS that satisfies
+    !  the BCs, but not the system.  Then, subtracting, you get a homeogeneous
+    !  system.
+    !
+    if (PRESENT(BCVALS)) then
+      !
+      bcn   => self % sysconn % bcs
+      numbc =  SIZE(bcn, 1)
+      !
+      call FormA(sysid, EMATS, APPLY_BCS=.FALSE.)
+      !
+      !  Form x0 satisfying bcs.
+      !
+      call VecSet(self % x0, 0.0d0, IERR)
+      !
+      IF (myrank == 0) THEN
+        call VecSetValues(self % x0, numbc, bcn, BCVALS, &
+             &  INSERT_VALUES, IERR)
+      end if
+      !
+      call VecAssemblyBegin(self % x0, IERR)
+      call VecAssemblyEnd  (self % x0, IERR)
+      !
+      call MatMult(self %   A, self % x0,   self % ax0, IERR)
+      call VecAXPY(self % ax0,    -1.0d0,   self % b,   IERR)
+      !
+      !  Prepare to solve homogeneous problem:  A(x-x0) = b-b0
+      !
+      if (myrank == 0) then
+        call VecSetValues(self % b, numbc, bcn, &
+             &  SPREAD(0.0d0, DIM=1, NCOPIES=numbc), &
+             &  INSERT_VALUES, IERR)
+      end if
+      !
+      call VecAssemblyBegin(self % b, IERR)
+      call VecAssemblyEnd  (self % b, IERR)
+      !
+    end if
+    !
+    ! ========== Solve System
+    !
+    !  A is now formed for a homogeneous problem.
+    !
+    call FormA(self, eMats, APPLY_BCS=.TRUE.)
+    call SolveSystem(self, mySTATUS)
+    !
+    IF (mySTATUS /= RETURN_SUCCESS) THEN
+      call SetStatus(RETURN_FAILURE); RETURN 
+    end if
+    !
+    !  At this point, the solution succeeded
+    !
+    if (PRESENT(BCVALS)) then ! add back in x0
+      CALL VecAXPY(self % x, 1.0d0, self % x0, IERR)
+    endif
+    !
+    IF (PRESENT(SOL_GLOBAL)) THEN
+      call SetGlobal()
+    END IF
+
+  CONTAINS ! ========================= Internal Procedures
+
+    ! ================================ BEGIN:  SetStatus
+    !
+    SUBROUTINE SetStatus(stat)
+      !
+      !  Set status, if present
+      !
+      ! ========== Arguments
+      !
+      INTEGER, INTENT(IN) :: stat
+      !
+      ! ============================== Executable Code
+      !
+      IF (PRESENT(STATUS)) THEN
+        STATUS = stat
+      END IF
+      !
+    END SUBROUTINE SetStatus
+    !
+    ! ================================   END:  SetStatus
+    ! ================================ BEGIN:  SetGlobal
+    !
+    SUBROUTINE SetGlobal()
+      !
+      !  Set global solution.
+      !
+      !
+      ! ========== Locals
+      !
+
+      !
+      ! ============================== Executable Code
+      !
+    INTEGER :: ierr, dofpe, elmin, elmax, 
     INTEGER :: elem, node, its, ibc, vecsize, i, iproc
-    INTEGER, POINTER :: bcn(:)
     !
     PetscScalar  :: xptr(1)
     PetscOffset  :: offs
@@ -334,146 +447,56 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  *** End:
     INTEGER :: iTmp
     DOUBLE PRECISION :: vMin, vMax
-    !
-    !--------------*-------------------------------------------------------
-    !
-    !
-    !  Form right hand side according to input options.
-    !
-    if (PRESENT(arhs)) then
-      !
-      call BFromARHS(sysid, arhs)
-    else 
-      !
-      call VecSet   (b(sysid), 0.0d0, ierr)
-      call VecAssemblyBegin(b(sysid), ierr)
-      call VecAssemblyEnd  (b(sysid), ierr)
-      !
-    end if
-    !
-    if (PRESENT(BCVALS)) then
-      !
-      bcn   => sysconn(sysid)%bcs
-      numbc = SIZE(bcn, 1)
-      !
-      if (PRESENT(erhs)) then
-        call BFromERHS(sysid, erhs, USE_ALL_DOF=.TRUE.)
-      end if
-      call FormA(sysid, emats, APPLY_BCS=.FALSE.)
-      !
-      !  Form x0 satisfying bcs.
-      !
-      call VecSet(x0(sysid), 0.0d0, ierr)
-      !
-      IF (myrank == 0) THEN
-        call VecSetValues(x0(sysid), numbc, bcn, bcvals, &
-             &  INSERT_VALUES, ierr)
-      end if
-      !
-      call VecAssemblyBegin(x0(sysid), ierr)
-      call VecAssemblyEnd  (x0(sysid), ierr)
-      !
-      call MatMult(A(sysid), x0(sysid), ax0(sysid), ierr)
-      call VecAXPY(ax0(sysid),  -1.0d0,   b(sysid), ierr)
-      !
-      !  Prepare to solve homogeneous problem:  A(x-x0) = b-b0
-      !
-      if (myrank == 0) then
-        call VecSetValues(b(sysid), numbc, bcn, &
-             &  SPREAD(0.0d0, DIM=1, NCOPIES=numbc), &
-             &  INSERT_VALUES, ierr)
-      end if
-      !
-      call VecAssemblyBegin(b(sysid), ierr)
-      call VecAssemblyEnd  (b(sysid), ierr)
-      !
-    else ! homogeneous boundary values
-      if (PRESENT(ERHS)) then
-        call BFromERHS(sysid, ERHS, USE_ALL_DOF=.FALSE.)
-      end if
-    end if
-    !
-    !  Now form matrix and solve system.
-    !
-    call FormA(sysid, emats, APPLY_BCS=.TRUE.)
-    call SolveSystem(sysid, mystatus)
-    !
-    !  Quit if system fails.
-    !
-    if (mystatus < 0) then
-      call closfl()
-    end if
-    !
-    if (PRESENT(STATUS)) then
-      STATUS = mystatus
-    end if
-    !
-    if (PRESENT(BCVALS)) then ! add back in x0
-      ! testing
-      !was ...! CALL VecAXPY(x0(sysid), 1.0d0, x(sysid), ierr)
-      CALL VecAXPY(x(sysid), 1.0d0, x0(sysid), ierr)
-    endif
-    !
-    !  Copy solution to 'sol'
-    !
-    vecsize = localsizes(myrank, sysid)
-    !allocate(xx_v(vecsize))
-    call VecGetArrayF90(x(sysid), xx_v, ierr)
-    PRINT *, '*** GetArrayF90:  ', ierr
 
-    CALL VecMin(x(sysid), iTmp, vMin, ierr)
-    CALL VecMax(x(sysid), iTmp, vMax, ierr)
-    PRINT *, '*** max(x):  ', vMin, vMax
-    PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
+      vecsize = localsizes(myrank, sysid)
+      !allocate(xx_v(vecsize))
+      call VecGetArrayF90(self % x, xx_v, ierr)
+      PRINT *, '*** GetArrayF90:  ', ierr
 
-    sol = xx_v
-    call VecRestoreArrayF90(x(sysid), xx_v, ierr)
-    PRINT *, '*** RestoreArrayF90:  ', ierr
-    !deallocate(xx_v)
-    WRITE(99, *) '---sol---'
-    WRITE(99, *) sol
-    !
-    !using VecGetArray!!
-    !using VecGetArray!vecsize = localsizes(myrank, sysid)
-    !using VecGetArray!call VecGetArray(x(sysid), xptr, offs, ierr)
-    !using VecGetArray!do i=1, vecsize
-    !using VecGetArray!   sol(i) = xptr(offs + i)
-    !using VecGetArray!end do
-    !using VecGetArray!call VecRestoreArray(x(sysid), xptr, offs, ierr)
-    !
-    !  Now construct global solution if requested.
-    !
-    if (PRESENT(SOL_GLOBAL)) then
-      !debug!! 
-      !debug!!  Get all local vectors on node 0 and return.
-      !debug!!
-      !debug!call MPI_AllGatherV(&
-      !debug!     &  sol, vecsize, MPI_DOUBLE_PRECISION, &
-      !debug!     &  SOL_GLOBAL, localsizes(:, sysid), &
-      !debug!     &  section_beg(:, sysid) - 1, MPI_DOUBLE_PRECISION,&
-      !debug!     &  PETSC_COMM_WORLD, ierr)
-      !debug!PRINT *, '*** AllGather status:  ', ierr
-      !debug!WRITE(99, *) '---sol global---'
-      !debug!WRITE(99, *) SOL_GLOBAL
+      CALL VecMin(self % x, iTmp, vMin, ierr)
+      CALL VecMax(self % x, iTmp, vMax, ierr)
+      PRINT *, '*** max(x):  ', vMin, vMax
+      PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
+
+      sol = xx_v
+      call VecRestoreArrayF90(self % x, xx_v, ierr)
+      PRINT *, '*** RestoreArrayF90:  ', ierr
+      !deallocate(xx_v)
+      WRITE(99, *) '---sol---'
+      WRITE(99, *) sol
+      !
+      !using VecGetArray!!
+      !using VecGetArray!vecsize = localsizes(myrank, sysid)
+      !using VecGetArray!call VecGetArray(self % x, xptr, offs, ierr)
+      !using VecGetArray!do i=1, vecsize
+      !using VecGetArray!   sol(i) = xptr(offs + i)
+      !using VecGetArray!end do
+      !using VecGetArray!call VecRestoreArray(self % x, xptr, offs, ierr)
+      !
+      !  Now construct global solution if requested.
+      !
       SOL_GLOBAL = sol
       !
-    endif
+      !
+    END SUBROUTINE SetGlobal
     !
-  END SUBROUTINE LinearSolverPETScSolve
+    ! =================================   END:  SetGlobal
+
+    !
+  END SUBROUTINE LinearSolverSolve
   !
+  ! ====================================================   END:  LinearSolverSolve
   ! ==================================================== BEGIN:  SetBfromARHS
   !
   SUBROUTINE SetBfromARHS(self, arhs)
     !
-    !  Set the PETSc right-hand side, b, from assembled RHS, arhs.
+    !  (PRIVATE) Set the PETSc right-hand side, b, from assembled RHS, arhs.
     !
     ! ========== Arguments
     !
     !  .     REQUIRED ARGS
     !  self -- the LinearSolver instance
-    !  arhs -- assembled right-hand side (1-based array)
-    !
-    !  .     OPTIONAL ARGS (none yet)
+    !  arhs -- assembled right-hand side (1-based array, local to process)
     !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
     DOUBLE PRECISION,       INTENT(IN)     :: arhs(:)
@@ -486,7 +509,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     do i=1, self % l_numDOF
       n = self % g_num0 + i - 2  ! make 0-based
-      CALL VecSetValues( self % b, 1, n, arhs(i), INSERT_VALUES, IERR)
+      CALL VecSetValues(self % b, 1, n, arhs(i), INSERT_VALUES, IERR)
     end do
     !
     call VecAssemblyBegin(self % b, IERR)

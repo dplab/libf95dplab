@@ -267,7 +267,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   ! ==================================================== LinearSolverCreate:  END
   ! ==================================================== BEGIN:  LinearSolverSolve
   !
-  SUBROUTINE LinearSolverSolve(sol, eMats,&
+  SUBROUTINE LinearSolverSolve(self, sol, eMats,&
        &   ERHS, ARHS, &
        &   BCVALS, SOL_GLOBAL, STATUS)
     !
@@ -280,6 +280,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     ! ========== Arguments
     !
     !  .     REQUIRED ARGS
+    !  self  -- the linear solver instance
     !  sol   -- the local solution vector (section on this process)
     !  eMats -- the local elemental stiffness matrices
     !
@@ -290,6 +291,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  BCVALS     -- boundary values to enforce (usually nonzero)
     !  SOL_GLOBAL -- global solution vector
     !  STATUS     -- return value; convergence status from PetSc
+    !
+    TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
     DOUBLE PRECISION, INTENT(IN OUT) :: sol(:)
     DOUBLE PRECISION, INTENT(IN)     :: emats(:, :, :)

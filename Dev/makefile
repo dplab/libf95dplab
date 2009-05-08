@@ -1,5 +1,7 @@
 # $Id: makefile,v 1.45 2001/08/22 18:00:07 balay Exp $ 
 
+FC = ifort
+
 CFLAGS	         = -I${PETSC_DIR}/src/dm/mesh/sieve ${BOOST_INCLUDE} ${TRIANGLE_INCLUDE} ${TETGEN_INCLUDE}
 FFLAGS	         = 
 CPPFLAGS         = 
@@ -11,22 +13,16 @@ default:  linear-solver.x
 include ${PETSC_DIR}/bmake/common/base
 
 #
-MAIN.o = isaiah.o
-MYOBJS = LinearSolverPetscModule.o $(OBJECTS)
+MAIN.o = linear-solver.o
+MYOBJS = LinearSolverPetscModule.o
 MYLIB  = libf90.a 
 #
 #
 #  My f90 options.
 #
-LIBDIR   = ../../f90-dplab/modules/BUILD
-MODDIR   = $(LIBDIR)
-LIBRARY  = $(LIBDIR)/libf90.a
-LIBFLAGS = -L$(LIBDIR) -lf90 
-MODFLAGS = -module $(MODDIR)
-#
 OTHER_OPTS = -error-limit 5 -check all -traceback -check noarg_temp_created
 #
-FFLAGS           = $(MODFLAGS) $(OTHER_OPTS)
+FFLAGS           = 
 LOCDIR		 = .
 
 #FC_FLAGS =  -I. -fPIC -names lowercase

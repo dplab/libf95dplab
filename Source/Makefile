@@ -13,8 +13,9 @@ StringsModule.f95\
 FilesModule.f95\
 TimerModule.f95
 #
-F95 = f95
-F95FLAGS = -O -mdir Modules -I Modules
+F90 = ifort
+F95 = ifort
+F95FLAGS = -O  -module Modules
 #
 #--------------------*--------------------------------------------------
 #

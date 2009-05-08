@@ -437,7 +437,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       !
       ! ============================== Executable Code
       !
-    INTEGER :: ierr, dofpe, elmin, elmax, 
+    INTEGER :: ierr, dofpe, elmin, elmax
     INTEGER :: elem, node, its, ibc, vecsize, i, iproc
     !
     PetscScalar  :: xptr(1)
@@ -523,7 +523,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   ! ====================================================   END:  SetBfromARHS
   ! ==================================================== BEGIN:  SetBfromERHS
   !
-  SUBROUTINE SetBfromERHS(self Erhs, USE_ALL_DOF)
+  SUBROUTINE SetBfromERHS(self, Erhs, USE_ALL_DOF)
     !
     !  Set the PETSc right-hand side from elemental right-hand sides.
     !
@@ -620,7 +620,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     !  .     OPTIONAL ARGS
     !
-    TYEP(LinearSolverType), INTENT(IN OUT) :: self
+    TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
     DOUBLE PRECISION, INTENT(IN) :: emats(:, :, :)
     LOGICAL, INTENT(IN) :: APPLY_BCS
@@ -762,7 +762,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     call KSPGetConvergedReason(ksp, reason, IERR)
     CALL KSPGetIterationNumber(ksp, its, IERR)
     !
-    PRINT *, 'Linear system '//TRIM(ADJUSTL(self % name))// ':  iterations ', its, , ', code ', reason
+    PRINT *, 'Linear system '//TRIM(ADJUSTL(self % name))// ':  iterations ', &
+         &   its, ', code ', reason
     IF (reason < 0) THEN
       CALL DescribeDivergedReason(0, reason)
     END IF

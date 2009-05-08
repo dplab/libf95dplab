@@ -52,23 +52,33 @@ PROGRAM LinearSolver
       !
       !  Read input.
       !
+      !  Comment lines are expected before each block.
+      !
       ! ========== Arguments
       !
 
       !
       ! ========== Locals
       !
-
+      CHARACTER(LEN=128) :: line
       !
       ! ============================== Executable Code
       !
+      READ(5, *) line;  WRITE(6, *) TRIM(line)
       READ(5, *) nDOFpe, nElem, nDOFgl, numBC
       locsize = nDOFgl
       ALLOCATE(conn(nDOFpe, nElem), bcNodes(numBC))
       ALLOCATE(eMats(nDOFpe, nDOFpe, nElem), &
            &   eRhs(nDOFpe, nElem),&
            &   sol(locsize))
+      !
+      READ(5, *) line;  WRITE(6, *) TRIM(line)
+      READ(5, *) conn
+      READ(5, *) line;  WRITE(6, *) TRIM(line)
+      READ(5, *) bcnodes
+      READ(5, *) line;  WRITE(6, *) TRIM(line)
       READ(5, *) eMats
+      READ(5, *) line;  WRITE(6, *) TRIM(line)
       READ(5, *) eRhs
       !
       !

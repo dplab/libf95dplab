@@ -9,8 +9,6 @@ MODULE LinearSolverPETScModule
   !
   ! * Max iterations for a system is set to twice the total degrees of freedom.
   !
-  USE IntrinsicTypesModule,  RK=>REAL_KIND, IK=>INTEGER_KIND, LK=>LOGICAL_KIND
-  !
   IMPLICIT NONE
   !
   ! ==================== PETSc Includes
@@ -107,7 +105,7 @@ MODULE LinearSolverPETScModule
 CONTAINS ! ============================================= MODULE PROCEDURES
   !
   ! ==================================================== BEGIN:  LinearSolverPETScInit
-  SUBROUTINE LinearSolverPETScInit(status)
+  SUBROUTINE LinearSolverPETScInit()
     !
     !  Module initialization.  (PRIVATE)
     !
@@ -117,9 +115,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! ========== Arguments
     !
-    !  status -- return value:  0 for success
-    !
-    INTEGER, INTENT(OUT) :: status
+    CHARACTER(LEN=*), PARAMETER :: myNAME = 'LinearSolverPETScInit'
     !
     ! ========== Locals
     !
@@ -127,10 +123,10 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! ================================================== Executable Code
     !
-    call PetscInitialize(PETSC_NULL_CHARACTER, status)
+    call PetscInitialize(PETSC_NULL_CHARACTER, IERR)
     !
-    call MPI_Comm_size(PETSC_COMM_WORLD, numprocs,ierr)
-    call MPI_Comm_rank(PETSC_COMM_WORLD, myrank,  ierr)
+    call MPI_Comm_size(PETSC_COMM_WORLD, numprocs,IERR)
+    call MPI_Comm_rank(PETSC_COMM_WORLD, myrank,  IERR)
     !
     PETScInitialized = .TRUE.
     !
@@ -138,21 +134,28 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   ! ====================================================   END:  LinearSolverPETScInit
   ! ==================================================== BEGIN:  LinearSolverCreate
   !
-  SUBROUTINE LinearSolverCreate(self, name, conn, bcnodes, locsizes, SYMM)
+  SUBROUTINE LinearSolverCreate(self, name, conn, bcNodes, locSizes, SYMMETRY, STATUS)
     !
     !  Create an instance of a linear solver.
     !
     ! ========== Arguments
     !
+    !  .     REQUIRED ARGS
+    !
+    !  self     -- the linear system type
     !  name     -- the name of the linear system (for messages)
-    !  locsizes -- number of degrees of freedom on each processor
     !  conn     -- 1-based connectivity section (for DOF's of the system)
     !           -- each process passes some section of the connectivity
-    !  bcnodes  -- 1-based global list of DOF numbers with essential BC's
+    !  bcNodes  -- 1-based global list of DOF numbers with essential BC's
     !           -- each process needs to pass the complete list of DOF numbers.
-    !  locsizes -- number of degrees of freedom on each processor
+    !  locSizes -- number of degrees of freedom on all processor
+    !              (need to know both number of DOF on this processor and starting 
+    !               global node number)
+    !
+    !  .     OPTIONAL ARGS
+    !
     !  SYMM     -- symmetric system indicator (optional) 
-    !  status   -- return value (optional):  0 for success (not used at the moment)
+    !  STATUS   -- return value (optional):  0 for success (not used at the moment)
     !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
@@ -161,13 +164,15 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     INTEGER, INTENT(IN) :: conn(:, :)
     INTEGER, INTENT(IN) :: bcnodes(:)
     INTEGER, INTENT(IN) :: locsizes(0:)
-    LOGICAL, INTENT(IN), OPTIONAL :: SYMM
     !
-    INTEGER, INTENT(OUT), OPTIONAL :: STATUS
+    LOGICAL, INTENT(IN)  :: SYMMETRY
+    INTEGER, INTENT(OUT) :: STATUS
+    !
+    OPTIONAL :: SYMMETRY, STATUS
     !
     ! ========== Locals
     !
-    INTEGER :: iproc, ndof_loc, ndof_glo, aStat
+    INTEGER :: iproc, ndof_loc, ndof_glo, aStat, dofpe, numEl, numBC
     INTEGER :: rowAlloc, IERR
     !
     INTEGER, ALLOCATABLE :: bcsign(:)
@@ -196,19 +201,17 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! ========== Local array sizes and ranges
     !
-    ALLOCATE(self % localsizes (0:(numprocs-1)), &
-         &   self % section_beg(0:(numprocs-1))  )    
+    ndof_loc = locsizes(myrank)
+    ndof_glo = SUM(locsizes)
     !
-    self % localsizes  = locsizes
-    self % section_beg(0) = 1
-    do iproc=1, numprocs - 1
-      self % section_beg(iproc) = self % section_beg(iproc - 1) + locsizes(iproc - 1)
+    self % l_numDOF = ndof_loc
+    !
+    self % g_num0   = 1  ! 1-based array
+    DO iproc=0, myrank - 1
+      self % g_num0 = self % g_num0 + locsizes(iproc)
     end do
     !
     ! ========== Connectivity and BCs
-    !
-    ndof_glo = SUM(locsizes)
-    ndof_loc = locsizes(myrank)
     !
     dofpe  = SIZE(conn, 1)
     numel  = SIZE(conn, 2)
@@ -220,7 +223,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
          &   STAT=aStat)
     ! TODO:  check aStat and deallocate if allocation failed
     !
-    self % sysconn % bcs = bcnodes - 1 ! make zero-based
+    self % sysConn % bcs = bcnodes - 1 ! make zero-based
     !
     !  This makes the connectivity negative for nodes with BCs.
     !  These are then ignored by PETSc. [checked 2009-04-30, see MatSetValues docs]
@@ -229,13 +232,13 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !         subtract one from all node numbers to make the resulting list  0-based.  
     !         Subtracting one before changing sign does not work properly for node 1(0).
     !
-    bcsign = 1
-    bcsign(bcnodes) = -1
-    sysconn % sconn = conn*&
+    bcSign = 1
+    bcSign(bcnodes) = -1
+    self % sysConn % sconn = conn*&
          &   RESHAPE(bcsign(RESHAPE(conn, (/dofpe*numel/))), &
          &   (/dofpe, numel/)) - 1 ! changes sign for BC dof
     !
-    DEALLOCATE(bcsign)
+    DEALLOCATE(bcSign)
     !
     ! ========== Make PETSc objects
     !
@@ -303,6 +306,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     DOUBLE PRECISION, INTENT(OUT), OPTIONAL :: SOL_GLOBAL(:)
     !
     INTEGER, INTENT(OUT), OPTIONAL :: STATUS
+    TARGET :: self  ! so can use pointers on components
     !
     ! ========== Locals
     !
@@ -338,7 +342,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !     they will be backsolved
     !
     IF (PRESENT(ERHS)) THEN
-      CALL BFromERHS(self, ERHS, USE_ALL_DOF=PRESENT(BCVALS))
+      CALL SetBFromERHS(self, ERHS, USE_ALL_DOF=PRESENT(BCVALS))
     END IF
     !
     ! ========== Handle BCs
@@ -352,7 +356,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       bcn   => self % sysconn % bcs
       numbc =  SIZE(bcn, 1)
       !
-      call FormA(sysid, EMATS, APPLY_BCS=.FALSE.)
+      call FormA(self, EMATS, APPLY_BCS=.FALSE.)
       !
       !  Form x0 satisfying bcs.
       !
@@ -437,45 +441,45 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       !
       ! ============================== Executable Code
       !
-    INTEGER :: ierr, dofpe, elmin, elmax
-    INTEGER :: elem, node, its, ibc, vecsize, i, iproc
-    !
-    PetscScalar  :: xptr(1)
-    PetscOffset  :: offs
-    PetscScalar, POINTER :: xx_v(:) => NULL()
-    !DOUBLE PRECISION, ALLOCATABLE :: xx_v(:)
-    !
-    INTEGER :: mpistat(MPI_STATUS_SIZE), mystatus
-    !
-    !  *** End:
-    INTEGER :: iTmp
-    DOUBLE PRECISION :: vMin, vMax
-
-      vecsize = localsizes(myrank, sysid)
-      !allocate(xx_v(vecsize))
-      call VecGetArrayF90(self % x, xx_v, ierr)
-      PRINT *, '*** GetArrayF90:  ', ierr
-
-      CALL VecMin(self % x, iTmp, vMin, ierr)
-      CALL VecMax(self % x, iTmp, vMax, ierr)
-      PRINT *, '*** max(x):  ', vMin, vMax
-      PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
-
-      sol = xx_v
-      call VecRestoreArrayF90(self % x, xx_v, ierr)
-      PRINT *, '*** RestoreArrayF90:  ', ierr
-      !deallocate(xx_v)
-      WRITE(99, *) '---sol---'
-      WRITE(99, *) sol
-      !
-      !using VecGetArray!!
-      !using VecGetArray!vecsize = localsizes(myrank, sysid)
-      !using VecGetArray!call VecGetArray(self % x, xptr, offs, ierr)
-      !using VecGetArray!do i=1, vecsize
-      !using VecGetArray!   sol(i) = xptr(offs + i)
-      !using VecGetArray!end do
-      !using VecGetArray!call VecRestoreArray(self % x, xptr, offs, ierr)
-      !
+    !!!INTEGER :: ierr, dofpe, elmin, elmax
+    !!!INTEGER :: elem, node, its, ibc, vecsize, i, iproc
+    !!!!
+    !!!PetscScalar  :: xptr(1)
+    !!!PetscOffset  :: offs
+    !!!PetscScalar, POINTER :: xx_v(:) => NULL()
+    !!!!DOUBLE PRECISION, ALLOCATABLE :: xx_v(:)
+    !!!!
+    !!!INTEGER :: mpistat(MPI_STATUS_SIZE), mystatus
+    !!!!
+    !!!!  *** End:
+    !!!INTEGER :: iTmp
+    !!!DOUBLE PRECISION :: vMin, vMax
+    !!!
+    !!!  vecsize = localsizes(myrank, sysid)
+    !!!  !allocate(xx_v(vecsize))
+    !!!  call VecGetArrayF90(self % x, xx_v, ierr)
+    !!!  PRINT *, '*** GetArrayF90:  ', ierr
+    !!!
+    !!!  CALL VecMin(self % x, iTmp, vMin, ierr)
+    !!!  CALL VecMax(self % x, iTmp, vMax, ierr)
+    !!!  PRINT *, '*** max(x):  ', vMin, vMax
+    !!!  PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
+    !!!
+    !!!  sol = xx_v
+    !!!  call VecRestoreArrayF90(self % x, xx_v, ierr)
+    !!!  PRINT *, '*** RestoreArrayF90:  ', ierr
+    !!!  !deallocate(xx_v)
+    !!!  WRITE(99, *) '---sol---'
+    !!!  WRITE(99, *) sol
+    !!!  !
+    !!!  !using VecGetArray!!
+    !!!  !using VecGetArray!vecsize = localsizes(myrank, sysid)
+    !!!  !using VecGetArray!call VecGetArray(self % x, xptr, offs, ierr)
+    !!!  !using VecGetArray!do i=1, vecsize
+    !!!  !using VecGetArray!   sol(i) = xptr(offs + i)
+    !!!  !using VecGetArray!end do
+    !!!  !using VecGetArray!call VecRestoreArray(self % x, xptr, offs, ierr)
+    !!!  !
       !  Now construct global solution if requested.
       !
       SOL_GLOBAL = sol
@@ -546,6 +550,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     DOUBLE PRECISION, INTENT(IN) :: Erhs(:, :)
     LOGICAL, INTENT(IN) :: USE_ALL_DOF
+    !
+    TARGET :: self 
     !
     ! ========== Locals
     !
@@ -625,6 +631,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     DOUBLE PRECISION, INTENT(IN) :: emats(:, :, :)
     LOGICAL, INTENT(IN) :: APPLY_BCS
     !
+    TARGET :: self
+    !
     ! ========== Locals
     !
     INTEGER :: dofpe, elem, elmin, elmax, numbc, ibc, IERR
@@ -640,7 +648,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     bcn   => self % sysconn % bcs
     numbc = SIZE(bcn, 1)
 
-    call MatZeroEntries(A(sysid), ierr)
+    call MatZeroEntries(self % A, ierr)
 
     if (APPLY_BCS) then
       !
@@ -669,7 +677,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       !  all DOF are assembled.
       !
       do elem=elmin, elmax
-        call MatSetValues(A(sysid), &
+        call MatSetValues(self % A, &
              &   dofpe, ABS(1 + sconn(:, elem)) - 1,&
              &   dofpe, ABS(1 + sconn(:, elem)) - 1,&
              &   TRANSPOSE(emats(:, :, elem)), ADD_VALUES, IERR)

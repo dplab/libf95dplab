@@ -21,8 +21,8 @@ PROGRAM LinearSolver
   !
   !  Array dimensions and data.
   !
-  INTEGER :: nDOFpe, nElem, nDOFgl, numBC
-  INTEGER. ALLOCATABLE :: conn(:, :), bcNodes(:), locSize
+  INTEGER :: nDOFpe, nElem, nDOFgl, numBC, status
+  INTEGER, ALLOCATABLE :: conn(:, :), bcNodes(:), locSizes(:)
   !
   REAL(RK), ALLOCATABLE :: eMats(:, :, :), eRhs(:, :)
   REAL(RK), ALLOCATABLE :: sol(:)
@@ -37,10 +37,9 @@ PROGRAM LinearSolver
   call ReadInput()
   !
   CALL LinearSolverCreate(solver, &
-       &   NAME, conn, bcnodes, locsize)
+       &   NAME, conn, bcnodes, locsizes)
 
-  CALL LinearSolverSolver(solver)
-  SUBROUTINE LinearSolverSolve(solver, sol, eMats,&
+  CALL LinearSolverSolve(solver, sol, eMats,&
        &   ERHS=erhs, STATUS=status)
     !
 
@@ -66,11 +65,12 @@ PROGRAM LinearSolver
       !
       READ(5, *) line;  WRITE(6, *) TRIM(line)
       READ(5, *) nDOFpe, nElem, nDOFgl, numBC
-      locsize = nDOFgl
+      ALLOCATE(locsizes(1))
+      locsizes(1) = nDOFgl
       ALLOCATE(conn(nDOFpe, nElem), bcNodes(numBC))
       ALLOCATE(eMats(nDOFpe, nDOFpe, nElem), &
            &   eRhs(nDOFpe, nElem),&
-           &   sol(locsize))
+           &   sol(locsizes(1)))
       !
       READ(5, *) line;  WRITE(6, *) TRIM(line)
       READ(5, *) conn

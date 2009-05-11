@@ -6,7 +6,6 @@ CFLAGS	         = -I${PETSC_DIR}/src/dm/mesh/sieve ${BOOST_INCLUDE} ${TRIANGLE_I
 FFLAGS	         = 
 CPPFLAGS         = 
 FPPFLAGS         =
-LOCDIR           = src/ksp/ksp/examples/tutorials/
 
 default:  linear-solver.x
 
@@ -22,7 +21,7 @@ MYLIB  = libf90.a
 #
 OTHER_OPTS = -error-limit 5 -check all -traceback -check noarg_temp_created
 #
-FFLAGS           = 
+FFLAGS           = ${OTHER_OPTS}
 LOCDIR		 = .
 
 #FC_FLAGS =  -I. -fPIC -names lowercase
@@ -30,7 +29,7 @@ LOCDIR		 = .
 #PETSC_FORTRAN_LIB = -L$(PETSC_DIR)/lib/$(PETSC_ARCH)
 #PETSC_LIBS = -lpetsc -lpetscksp -lpetscdm -lpetscmat-lpetscvec -lpetscts
 
-FLINKER = mpif90 -fPIC -g
+FLINKER = /opt/openmpi-1.2.7/bin/mpif90
 
 linear-solver.x:   $(MYOBJS) $(MAIN.o) 
 	-${FLINKER} -o $@ $(MAIN.o) $(MYOBJS) $(LIBFLAGS) ${PETSC_KSP_LIB}

@@ -21,7 +21,7 @@ MYLIB  = libf90.a
 #
 OTHER_OPTS = -error-limit 5 -check all -traceback -check noarg_temp_created
 #
-FFLAGS           = ${OTHER_OPTS}
+FFLAGS           = -g ${OTHER_OPTS}
 LOCDIR		 = .
 
 #FC_FLAGS =  -I. -fPIC -names lowercase

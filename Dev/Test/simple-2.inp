@@ -1,0 +1,13 @@
+#  SIMPLE TEST PROBLEM: 2x2
+#  nDOFpe, nElem, nDOFgl, numBC
+2   1  2  1
+# conn 2 x 1
+1 2
+# bcnodes  1 
+1
+# emats (2 x 2)  x 1
+1 0
+0 2
+# erhs  (2) x 1
+1
+2

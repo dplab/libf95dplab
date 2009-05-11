@@ -390,11 +390,15 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     !  A is now formed for a homogeneous problem.
     !
+    !  * Note:  mySTATUS from SolveSystem is PETSc reason (good if >= 0)
+    !
     call FormA(self, eMats, APPLY_BCS=.TRUE.)
     call SolveSystem(self, mySTATUS)
     !
-    IF (mySTATUS /= RETURN_SUCCESS) THEN
+    IF (mySTATUS < 0) THEN
       call SetStatus(RETURN_FAILURE); RETURN 
+    ELSE
+      call SetStatus(RETURN_SUCCESS)
     end if
     !
     !  At this point, the solution succeeded
@@ -403,8 +407,13 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       CALL VecAXPY(self % x, 1.0d0, self % x0, IERR)
     endif
     !
+    !  Copy solution into local copy for f90, and get
+    !  global solution if requested.
+    !
+    call GetLocal()
+    !
     IF (PRESENT(SOL_GLOBAL)) THEN
-      call SetGlobal()
+      call GetGlobal()
     END IF
 
   CONTAINS ! ========================= Internal Procedures
@@ -428,9 +437,49 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     END SUBROUTINE SetStatus
     !
     ! ================================   END:  SetStatus
+    ! ================================ BEGIN:  GetLocal
+    !
+    SUBROUTINE GetLocal()
+      !
+      !  Get local f90 solution vector.
+      !
+      ! ========== Arguments
+      !
+
+      !
+      ! ========== Locals
+      !
+      INTEGER :: ierr
+      !PetscScalar  :: xptr(1)
+      !PetscOffset  :: offs
+      PetscScalar, POINTER :: xx_v(:) => NULL()
+      !DOUBLE PRECISION, ALLOCATABLE :: xx_v(:)
+
+      INTEGER :: iTmp
+      DOUBLE PRECISION :: vMin, vMax
+      !
+      ! ============================== Executable Code
+      !
+      ALLOCATE(xx_v(self % l_numDOF))
+      call VecGetArrayF90(self % x, xx_v, IERR)
+      PRINT *, '*** GetArrayF90:  return code = ', IERR
+
+      CALL VecMin(self % x, iTmp, vMin, ierr)
+      CALL VecMax(self % x, iTmp, vMax, ierr)
+      PRINT *, '*** max(x):  ', vMin, vMax
+      PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
+
+      sol = xx_v
+      call VecRestoreArrayF90(self % x, xx_v, IERR)
+      PRINT *, '*** RestoreArrayF90:  return code', ierr
+      !deallocate(xx_v)
+      !
+    END SUBROUTINE GetLocal
+    !
+    ! =================================   END:  GetLocal
     ! ================================ BEGIN:  SetGlobal
     !
-    SUBROUTINE SetGlobal()
+    SUBROUTINE GetGlobal()
       !
       !  Set global solution.
       !
@@ -455,22 +504,6 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !!!INTEGER :: iTmp
     !!!DOUBLE PRECISION :: vMin, vMax
     !!!
-    !!!  vecsize = localsizes(myrank, sysid)
-    !!!  !allocate(xx_v(vecsize))
-    !!!  call VecGetArrayF90(self % x, xx_v, ierr)
-    !!!  PRINT *, '*** GetArrayF90:  ', ierr
-    !!!
-    !!!  CALL VecMin(self % x, iTmp, vMin, ierr)
-    !!!  CALL VecMax(self % x, iTmp, vMax, ierr)
-    !!!  PRINT *, '*** max(x):  ', vMin, vMax
-    !!!  PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
-    !!!
-    !!!  sol = xx_v
-    !!!  call VecRestoreArrayF90(self % x, xx_v, ierr)
-    !!!  PRINT *, '*** RestoreArrayF90:  ', ierr
-    !!!  !deallocate(xx_v)
-    !!!  WRITE(99, *) '---sol---'
-    !!!  WRITE(99, *) sol
     !!!  !
     !!!  !using VecGetArray!!
     !!!  !using VecGetArray!vecsize = localsizes(myrank, sysid)
@@ -485,7 +518,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       SOL_GLOBAL = sol
       !
       !
-    END SUBROUTINE SetGlobal
+    END SUBROUTINE GetGlobal
     !
     ! =================================   END:  SetGlobal
 

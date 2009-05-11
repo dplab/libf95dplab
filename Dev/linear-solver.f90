@@ -41,49 +41,57 @@ PROGRAM LinearSolver
 
   CALL LinearSolverSolve(solver, sol, eMats,&
        &   ERHS=erhs, STATUS=status)
+  !
+  WRITE(6, *) 'The solution is:  '
+  WRITE(6, *) sol
+
+CONTAINS ! ========================= Internal Procedures
+
+  ! ================================ BEGIN:  ReadInput
+  !
+  SUBROUTINE ReadInput()
+    !
+    !  Read input.
+    !
+    !  Comment lines are expected before each block.
+    !
+    ! ========== Arguments
     !
 
-  CONTAINS ! ========================= Internal Procedures
-
-    ! ================================ BEGIN:  ReadInput
     !
-    SUBROUTINE ReadInput()
-      !
-      !  Read input.
-      !
-      !  Comment lines are expected before each block.
-      !
-      ! ========== Arguments
-      !
-
-      !
-      ! ========== Locals
-      !
-      CHARACTER(LEN=128) :: line
-      !
-      ! ============================== Executable Code
-      !
-      READ(5, *) line;  WRITE(6, *) TRIM(line)
-      READ(5, *) nDOFpe, nElem, nDOFgl, numBC
-      ALLOCATE(locsizes(1))
-      locsizes(1) = nDOFgl
-      ALLOCATE(conn(nDOFpe, nElem), bcNodes(numBC))
-      ALLOCATE(eMats(nDOFpe, nDOFpe, nElem), &
-           &   eRhs(nDOFpe, nElem),&
-           &   sol(locsizes(1)))
-      !
-      READ(5, *) line;  WRITE(6, *) TRIM(line)
-      READ(5, *) conn
-      READ(5, *) line;  WRITE(6, *) TRIM(line)
-      READ(5, *) bcnodes
-      READ(5, *) line;  WRITE(6, *) TRIM(line)
-      READ(5, *) eMats
-      READ(5, *) line;  WRITE(6, *) TRIM(line)
-      READ(5, *) eRhs
-      !
-      !
-    END SUBROUTINE ReadInput
+    ! ========== Locals
     !
-    ! =================================   END:  ReadInput
+    CHARACTER(LEN=128) :: line
+    !
+    ! ============================== Executable Code
+    !
+    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(5, *) nDOFpe, nElem, nDOFgl, numBC
+    ALLOCATE(locsizes(1))
+    locsizes(1) = nDOFgl
+    ALLOCATE(conn(nDOFpe, nElem), bcNodes(numBC))
+    ALLOCATE(eMats(nDOFpe, nDOFpe, nElem), &
+         &   eRhs(nDOFpe, nElem),&
+         &   sol(locsizes(1)))
+    !
+    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(5, *) conn
+
+    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(5, *) bcnodes
+
+    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(5, *) eMats
+    WRITE(6, *) eMats
+
+    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(5, *) eRhs
+    WRITE(6, *) eRhs
+    !
+    !
+  END SUBROUTINE ReadInput
+  !
+  ! =================================   END:  ReadInput
   !
 END PROGRAM LinearSolver

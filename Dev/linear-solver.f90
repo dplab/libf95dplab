@@ -34,6 +34,8 @@ PROGRAM LinearSolver
   !
   !  Read Matrices and RHS.
   !
+  CALL LinearSolverPETScInit()
+  !
   call ReadInput()
   !
   CALL LinearSolverCreate(solver, &
@@ -44,6 +46,8 @@ PROGRAM LinearSolver
   !
   WRITE(6, *) 'The solution is:  '
   WRITE(6, *) sol
+
+  CALL LinearSolverPETScFinalize()
 
 CONTAINS ! ========================= Internal Procedures
 
@@ -61,37 +65,63 @@ CONTAINS ! ========================= Internal Procedures
     !
     ! ========== Locals
     !
+    INTEGER :: unit = 11
     CHARACTER(LEN=128) :: line
     !
     ! ============================== Executable Code
     !
-    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(5, *) nDOFpe, nElem, nDOFgl, numBC
-    ALLOCATE(locsizes(1))
-    locsizes(1) = nDOFgl
+    OPEN(UNIT=unit, FILE='input.txt')
+    !
+    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, *) nDOFpe, nElem, nDOFgl, numBC
+
+    call SetLocalSizes()
+
     ALLOCATE(conn(nDOFpe, nElem), bcNodes(numBC))
     ALLOCATE(eMats(nDOFpe, nDOFpe, nElem), &
          &   eRhs(nDOFpe, nElem),&
-         &   sol(locsizes(1)))
+         &   sol(locsizes(myrank)))
     !
-    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(5, *) conn
+    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, *) conn
 
-    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(5, *) bcnodes
+    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, *) bcnodes
 
-    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(5, *) eMats
+    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, *) eMats
     WRITE(6, *) eMats
 
-    READ(5, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(5, *) eRhs
+    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, *) eRhs
     WRITE(6, *) eRhs
     !
     !
   END SUBROUTINE ReadInput
   !
   ! =================================   END:  ReadInput
+  ! ================================ BEGIN:  SetLocalSizes
+  !
+  SUBROUTINE SetLocalSizes()
+    !
+    !  Partition data among processes.
+    !
+    ! ========== Locals
+    !
+    INTEGER :: perProc, numLeft
+    !
+    ! ============================== Executable Code
+    !
+    ALLOCATE(locsizes(0:numProcs-1))
+    perProc = nDOFgl / numProcs
+    numLeft = nDOFgl - perProc*numProcs
+    locsizes = perProc
+    locsizes(1:numLeft) = perProc + 1
+    PRINT *, 'local sizes:  ', locsizes
+    !
+  END SUBROUTINE SetLocalSizes
+  !
+  ! =================================   END:  SetLocalSizes
   !
 END PROGRAM LinearSolver

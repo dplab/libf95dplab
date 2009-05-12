@@ -80,7 +80,7 @@ MODULE LinearSolverPETScModule
   !
   !  PETSc/Parallel items.
   !
-  INTEGER :: numprocs = 0, myrank = -1
+  INTEGER :: numProcs = 0, myRank = -1
   !
   ! ==================== Public Entities
   !
@@ -100,6 +100,7 @@ MODULE LinearSolverPETScModule
   !
   ! ========== Procedures
   !
+  PUBLIC :: LinearSolverPETScInit, LinearSolverPETScFinalize
   PUBLIC :: LinearSolverCreate, LinearSolverSolve
   !
 CONTAINS ! ============================================= MODULE PROCEDURES
@@ -114,6 +115,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  Don't forget to call PetscFinalize at the end of the program.
     !
     ! ========== Arguments
+    !
+    ! ***NONE*** 
     !
     CHARACTER(LEN=*), PARAMETER :: myNAME = 'LinearSolverPETScInit'
     !
@@ -132,6 +135,30 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
   END SUBROUTINE LinearSolverPETScInit
   ! ====================================================   END:  LinearSolverPETScInit
+  ! ==================================================== BEGIN:  LinearSolverPETScFinalize
+  !
+  SUBROUTINE LinearSolverPETScFinalize()
+    !
+    !  Call PETScFinalize
+    !
+    ! ========== Arguments
+    !
+    ! ***NONE***
+    !
+    CHARACTER(LEN=*), PARAMETER :: myNAME = 'LinearSolverPETScFinalize'
+    !
+    ! ========== Locals
+    !
+    !
+    INTEGER :: IERR
+    !
+    ! ================================================== Executable Code
+    !
+    CALL PetscFinalize(IERR)
+    !
+  END SUBROUTINE LinearSolverPETScFinalize
+  !
+  ! ====================================================   END:  LinearSolverPETScFinalize
   ! ==================================================== BEGIN:  LinearSolverCreate
   !
   SUBROUTINE LinearSolverCreate(self, name, conn, bcNodes, locSizes, SYMMETRY, STATUS)

@@ -22,6 +22,7 @@ PROGRAM LinearSolver
   !  Array dimensions and data.
   !
   INTEGER :: nDOFpe, nElem, nDOFgl, numBC, status
+  INTEGER :: myEmin, myEmax ! elements on this process
   INTEGER, ALLOCATABLE :: conn(:, :), bcNodes(:), locSizes(:)
   !
   REAL(RK), ALLOCATABLE :: eMats(:, :, :), eRhs(:, :)
@@ -70,10 +71,10 @@ CONTAINS ! ========================= Internal Procedures
     !
     ! ============================== Executable Code
     !
-    OPEN(UNIT=unit, FILE='input.txt')
+    OPEN(UNIT=unit, FILE='input.txt', ACTION='READ')
     !
-    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
-    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
     READ(unit, *) nDOFpe, nElem, nDOFgl, numBC
 
     call SetLocalSizes()
@@ -83,19 +84,19 @@ CONTAINS ! ========================= Internal Procedures
          &   eRhs(nDOFpe, nElem),&
          &   sol(locsizes(myrank)))
     !
-    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
     READ(unit, *) conn
 
-    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
     READ(unit, *) bcnodes
 
-    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
     READ(unit, *) eMats
-    WRITE(6, *) eMats
+    WRITE(6, *) eMats(:, :, myEmin:myEmax)
 
-    READ(unit, '(a)') line;  WRITE(6, *) TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
     READ(unit, *) eRhs
-    WRITE(6, *) eRhs
+    WRITE(6, *) eRhs(:, myEmin:myEmax)
     !
     !
   END SUBROUTINE ReadInput
@@ -109,7 +110,7 @@ CONTAINS ! ========================= Internal Procedures
     !
     ! ========== Locals
     !
-    INTEGER :: perProc, numLeft
+    INTEGER :: perProc, numLeft, p, EperProc
     !
     ! ============================== Executable Code
     !
@@ -119,6 +120,22 @@ CONTAINS ! ========================= Internal Procedures
     locsizes = perProc
     locsizes(1:numLeft) = perProc + 1
     PRINT *, 'local sizes:  ', locsizes
+    !
+    !  Set element ranges.
+    !
+    EperProc = nElem / numProcs
+    numLeft  = nElem - EperProc*numProcs
+    myEmin = 1
+    DO p=0, myrank
+      IF (myRank == p) THEN
+        myEmax = myEmin + EperProc - 1
+        IF (p < numLeft) myEmax = myEmax + 1
+      ELSE
+        myEmin = myEmin + EperProc
+        IF (p < numLeft) myEmin = myEmin + 1
+      END IF
+    END DO
+    PRINT *, 'my rank and elements:  ', myrank, ':  ', myEmin, myEmax
     !
   END SUBROUTINE SetLocalSizes
   !

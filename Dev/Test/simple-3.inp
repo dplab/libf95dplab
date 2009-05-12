@@ -1,0 +1,15 @@
+#  SIMPLE TEST PROBLEM: 3 x 3
+#  nDOFpe, nElem, nDOFgl, numBC
+3   1  3  1
+# conn 2 x 1
+1 2 3
+# bcnodes  1 
+3
+# emats (3x3)  x 1
+1 0 0
+0 2 0
+0 0 3
+# erhs  (3) x 1
+3
+2
+1

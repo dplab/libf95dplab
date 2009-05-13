@@ -29,7 +29,7 @@ PROGRAM LinearSolver
   REAL(RK), ALLOCATABLE :: sol(:)
   REAL(RK), ALLOCATABLE  :: ARHS(:)
   REAL(RK), ALLOCATABLE  :: BCVALS(:)
-  REAL(RK), ALLOCATABLE  :: SOL_GLOBAL(:)
+  REAL(RK), ALLOCATABLE  :: solGlobal(:)
   !
   ! ================================================== Executable Code
   !
@@ -43,10 +43,10 @@ PROGRAM LinearSolver
        &   NAME, conn, bcnodes, locsizes)
 
   CALL LinearSolverSolve(solver, sol, eMats,&
-       &   ERHS=erhs, STATUS=status)
+       &   ERHS=erhs, SOL_GLOBAL=solGlobal, STATUS=status)
   !
   WRITE(6, *) 'The solution is:  '
-  WRITE(6, *) sol
+  WRITE(6, *) solGlobal
 
   CALL LinearSolverPETScFinalize()
 
@@ -82,7 +82,8 @@ CONTAINS ! ========================= Internal Procedures
     ALLOCATE(conn(nDOFpe, nElem), bcNodes(numBC))
     ALLOCATE(eMats(nDOFpe, nDOFpe, nElem), &
          &   eRhs(nDOFpe, nElem),&
-         &   sol(locsizes(myrank)))
+         &   sol(locsizes(myrank)),&
+         &   solGlobal(nDOFgl))
     !
     READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
     READ(unit, *) conn

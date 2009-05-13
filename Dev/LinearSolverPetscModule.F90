@@ -55,10 +55,16 @@ MODULE LinearSolverPETScModule
     Vec :: x, b, x0, ax0
     Mat :: A
     !
-    !  l_numDOF -- number of DOF on this (local) process
-    !  g_num0   -- starting (global) node number [1-based]
+    !  l_numDOF  -- number of DOF on this (local) process
+    !  g_num1    -- starting (global) node number [1-based]
     !
-    INTEGER :: l_numDOF, g_num0
+    !  These two are needed to construct global solution.
+    !
+    !  l_sizes   -- array of local DOF for all processes
+    !  g_offSets -- array of global DOF offsets
+    !
+    INTEGER :: l_numDOF, g_num1
+    INTEGER, ALLOCATABLE :: l_sizes(:), g_offSets(:)
     !
     Type(SystemConn) :: sysConn
     LOGICAL          :: symmetry = DFLT_SYMMETRY
@@ -233,10 +239,14 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     self % l_numDOF = ndof_loc
     !
-    self % g_num0   = 1  ! 1-based array
-    DO iproc=0, myrank - 1
-      self % g_num0 = self % g_num0 + locsizes(iproc)
+    ALLOCATE(self % l_sizes(0:numProcs-1), self % g_offSets(0:numProcs-1))
+    self % l_sizes   = locSizes
+    self % g_offSets = 0
+    !
+    DO iproc=1, numProcs - 1
+      self % g_offSets(iproc) = self % g_offSets(iproc) + locSizes(iproc - 1)
     end do
+    self % g_num1 = self % g_offSets(myRank) + 1
     !
     ! ========== Connectivity and BCs
     !
@@ -504,7 +514,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     END SUBROUTINE GetLocal
     !
     ! =================================   END:  GetLocal
-    ! ================================ BEGIN:  SetGlobal
+    ! ================================= BEGIN:  GetGlobal
     !
     SUBROUTINE GetGlobal()
       !
@@ -513,41 +523,19 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       !
       ! ========== Locals
       !
-
+      INTEGER :: IERR
       !
       ! ============================== Executable Code
       !
-    !!!INTEGER :: ierr, dofpe, elmin, elmax
-    !!!INTEGER :: elem, node, its, ibc, vecsize, i, iproc
-    !!!!
-    !!!PetscScalar  :: xptr(1)
-    !!!PetscOffset  :: offs
-    !!!PetscScalar, POINTER :: xx_v(:) => NULL()
-    !!!!DOUBLE PRECISION, ALLOCATABLE :: xx_v(:)
-    !!!!
-    !!!INTEGER :: mpistat(MPI_STATUS_SIZE), mystatus
-    !!!!
-    !!!!  *** End:
-    !!!INTEGER :: iTmp
-    !!!DOUBLE PRECISION :: vMin, vMax
-    !!!
-    !!!  !
-    !!!  !using VecGetArray!!
-    !!!  !using VecGetArray!vecsize = localsizes(myrank, sysid)
-    !!!  !using VecGetArray!call VecGetArray(self % x, xptr, offs, ierr)
-    !!!  !using VecGetArray!do i=1, vecsize
-    !!!  !using VecGetArray!   sol(i) = xptr(offs + i)
-    !!!  !using VecGetArray!end do
-    !!!  !using VecGetArray!call VecRestoreArray(self % x, xptr, offs, ierr)
-    !!!  !
-      !  Now construct global solution if requested.
-      !
-      SOL_GLOBAL = sol
-      !
+      CALL MPI_AllGatherV(&
+           &  sol, self % l_numDOF, MPI_DOUBLE_PRECISION, &
+           &  SOL_GLOBAL, self % l_sizes, self % g_offSets, MPI_DOUBLE_PRECISION,&
+           &  PETSC_COMM_WORLD, IERR)
+     PRINT *, '*** AllGather status:  ', IERR
       !
     END SUBROUTINE GetGlobal
     !
-    ! =================================   END:  SetGlobal
+    ! =================================   END:  GetGlobal
 
     !
   END SUBROUTINE LinearSolverSolve
@@ -575,7 +563,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     ! ================================================== Executable Code
     !
     do i=1, self % l_numDOF
-      n = self % g_num0 + i - 2  ! make 0-based
+      n = self % g_num1 + i - 2  ! make 0-based
       CALL VecSetValues(self % b, 1, n, arhs(i), INSERT_VALUES, IERR)
     end do
     !

@@ -45,8 +45,10 @@ PROGRAM LinearSolver
   CALL LinearSolverSolve(solver, sol, eMats,&
        &   ERHS=erhs, SOL_GLOBAL=solGlobal, STATUS=status)
   !
-  WRITE(6, *) 'The solution is:  '
-  WRITE(6, *) solGlobal
+  IF (myRank == 0) THEN
+    WRITE(6, *) 'The solution is:  '
+    WRITE(6, *) solGlobal
+  END IF
 
   CALL LinearSolverPETScFinalize()
 
@@ -73,8 +75,8 @@ CONTAINS ! ========================= Internal Procedures
     !
     OPEN(UNIT=unit, FILE='input.txt', ACTION='READ')
     !
-    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
-    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, '(i0,a)') myrank, ':  '//TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, '(i0,a)') myrank, ':  '//TRIM(line)
     READ(unit, *) nDOFpe, nElem, nDOFgl, numBC
 
     call SetLocalSizes()
@@ -85,17 +87,17 @@ CONTAINS ! ========================= Internal Procedures
          &   sol(locsizes(myrank)),&
          &   solGlobal(nDOFgl))
     !
-    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, '(i0,a)') myrank, ':  '//TRIM(line)
     READ(unit, *) conn
 
-    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, '(i0,a)') myrank, ':  '//TRIM(line)
     READ(unit, *) bcnodes
 
-    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, '(i0,a)') myrank, ':  '//TRIM(line)
     READ(unit, *) eMats
     WRITE(6, *) eMats(:, :, myEmin:myEmax)
 
-    READ(unit, '(a)') line;  WRITE(6, *) myrank, ':', TRIM(line)
+    READ(unit, '(a)') line;  WRITE(6, '(i0,a)') myrank, ':  '//TRIM(line)
     READ(unit, *) eRhs
     WRITE(6, *) eRhs(:, myEmin:myEmax)
     !
@@ -120,7 +122,10 @@ CONTAINS ! ========================= Internal Procedures
     numLeft = nDOFgl - perProc*numProcs
     locsizes = perProc
     locsizes(1:numLeft) = perProc + 1
-    PRINT *, 'local sizes:  ', locsizes
+    IF (myRank == 0) THEN
+      WRITE(6, '(i0,a)') myrank, ':  '//'local sizes:  '
+      PRINT *, locsizes
+    END IF
     !
     !  Set element ranges.
     !
@@ -136,7 +141,7 @@ CONTAINS ! ========================= Internal Procedures
         IF (p < numLeft) myEmin = myEmin + 1
       END IF
     END DO
-    PRINT *, 'my rank and elements:  ', myrank, ':  ', myEmin, myEmax
+    WRITE(6, '(i0,a,1x,i0,1x,i0)') myrank, ':  '//'my elements', myEmin, myEmax
     !
   END SUBROUTINE SetLocalSizes
   !

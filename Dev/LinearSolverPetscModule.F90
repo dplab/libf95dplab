@@ -244,7 +244,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     self % g_offSets = 0
     !
     DO iproc=1, numProcs - 1
-      self % g_offSets(iproc) = self % g_offSets(iproc) + locSizes(iproc - 1)
+      self % g_offSets(iproc) = self % g_offSets(iproc - 1) + locSizes(iproc - 1)
     end do
     self % g_num1 = self % g_offSets(myRank) + 1
     !
@@ -486,30 +486,20 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       !
       ! ========== Locals
       !
-      INTEGER :: ierr
-      !PetscScalar  :: xptr(1)
-      !PetscOffset  :: offs
+      INTEGER :: IERR
+
       PetscScalar, POINTER :: xx_v(:) => NULL()
-      !DOUBLE PRECISION, ALLOCATABLE :: xx_v(:)
 
       INTEGER :: iTmp
       DOUBLE PRECISION :: vMin, vMax
       !
       ! ============================== Executable Code
       !
-      ALLOCATE(xx_v(self % l_numDOF))
+      !ALLOCATE(xx_v(self % l_numDOF))
       call VecGetArrayF90(self % x, xx_v, IERR)
-      PRINT *, '*** GetArrayF90:  return code = ', IERR
-
-      CALL VecMin(self % x, iTmp, vMin, ierr)
-      CALL VecMax(self % x, iTmp, vMax, ierr)
-      PRINT *, '*** max(x):  ', vMin, vMax
-      PRINT *, '*** max(xx_v):  ', MAXVAL(xx_v), MINVAL(xx_v)
-
       sol = xx_v
       call VecRestoreArrayF90(self % x, xx_v, IERR)
-      PRINT *, '*** RestoreArrayF90:  return code', ierr
-      !deallocate(xx_v)
+      !DEALLOCATE(xx_v)
       !
     END SUBROUTINE GetLocal
     !
@@ -531,7 +521,6 @@ CONTAINS ! ============================================= MODULE PROCEDURES
            &  sol, self % l_numDOF, MPI_DOUBLE_PRECISION, &
            &  SOL_GLOBAL, self % l_sizes, self % g_offSets, MPI_DOUBLE_PRECISION,&
            &  PETSC_COMM_WORLD, IERR)
-     PRINT *, '*** AllGather status:  ', IERR
       !
     END SUBROUTINE GetGlobal
     !

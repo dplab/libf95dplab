@@ -1,6 +1,6 @@
 #  TEST PROBLEM:  5x5 tridiagonal system 
 #  homoBC, useARHS
-T  F
+F  F
 #  nDOFpe, nElem, nDOFgl, numBC
 2  4  5  1
 # conn [2x4]
@@ -15,8 +15,8 @@ T  F
 # erhs  (2) x 4   [6 5 5 5 8]nonHomoBC, [6 5 5 8 0]homoBC
 6 3
 2 3
-2 8
-0 0
+2 4
+1 8
 #  if not homoBC, values go here
 1.0
 #  if useARHS, arhs goes here 

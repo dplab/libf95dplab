@@ -328,7 +328,10 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  ERHS       -- the local elemental right-hand sides
     !  ARHS       -- assembled right-hand side (1-based array);
     !             -- mutually exclusive with ERHS
-    !  BCVALS     -- boundary values to enforce (usually nonzero)
+    !  BCVALS     -- boundary values to apply (usually nonzero);
+    !                this is a global array;  only values from 
+    !                process 0 are used, but this argument must
+    !                be present on all other processes
     !  SOL_GLOBAL -- global solution vector
     !  STATUS     -- return value; convergence status from PetSc
     !
@@ -393,7 +396,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       bcn   => self % sysconn % bcs
       numbc =  SIZE(bcn, 1)
       !
-      call FormA(self, EMATS, APPLY_BCS=.FALSE.)
+      call FormA(self, EMATS, HOMOGENEOUS_BCS=.FALSE.)
       !
       !  Form x0 satisfying bcs.
       !
@@ -408,7 +411,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       call VecAssemblyEnd  (self % x0, IERR)
       !
       call MatMult(self %   A, self % x0,   self % ax0, IERR)
-      call VecAXPY(self % ax0,    -1.0d0,   self % b,   IERR)
+      call VecAXPY(self % b,    -1.0d0,   self % ax0,   IERR)
       !
       !  Prepare to solve homogeneous problem:  A(x-x0) = b-b0
       !
@@ -429,7 +432,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     !  * Note:  mySTATUS from SolveSystem is PETSc reason (good if >= 0)
     !
-    call FormA(self, eMats, APPLY_BCS=.TRUE.)
+    call FormA(self, eMats, HOMOGENEOUS_BCS=.TRUE.)
     call SolveSystem(self, mySTATUS)
     !
     IF (mySTATUS < 0) THEN
@@ -441,7 +444,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  At this point, the solution succeeded
     !
     if (PRESENT(BCVALS)) then ! add back in x0
-      CALL VecAXPY(self % x, 1.0d0, self % x0, IERR)
+      CALL VecAXPY(self % x, 1.0d0, self % x0, IERR) ! y = y + a * x
     endif
     !
     !  Copy solution into local copy for f90, and get
@@ -648,7 +651,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   ! ====================================================   END:  SetBfromERHS
   ! ==================================================== BEGIN:  FormA
   !
-  SUBROUTINE FormA(self, emats, APPLY_BCS)
+  SUBROUTINE FormA(self, emats, HOMOGENEOUS_BCS)
     !
     !  Form PETSc matrix.
     !
@@ -657,16 +660,17 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  .     REQUIRED ARGS
     !  self  -- the LinearSolver instance
     !  eMats -- elemental matrices
-    !  APPLY_BCS -- flag for applying boundary conditions
-    !            -- if true, set up the matrix for applied boundary conditions;
-    !            -- otherwise, assemble the matrix for all degrees of freedom.
     !
-    !  .     OPTIONAL ARGS
+    !  HOMOGENEOUS_BCS 
+    !        -- flag indicating homogeneous (zero) boundary conditions
+    !        -- if true, ignore matrix contributions from these nodes;
+    !        -- otherwise, include them, as they will need to be backsolved
+    !
     !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
     DOUBLE PRECISION, INTENT(IN) :: emats(:, :, :)
-    LOGICAL, INTENT(IN) :: APPLY_BCS
+    LOGICAL, INTENT(IN) :: HOMOGENEOUS_BCS
     !
     TARGET :: self
     !
@@ -687,7 +691,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
 
     call MatZeroEntries(self % A, ierr)
 
-    if (APPLY_BCS) then
+    if (HOMOGENEOUS_BCS) then
       !
       !  Negative DOF number is ignored by PETSc.
       !
@@ -698,7 +702,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
              &   TRANSPOSE(emats(:, :, elem)), ADD_VALUES, IERR)
       end do
       !
-      !  Only one process need apply the BCs.
+      !  Set the diagonal to one.  Only one process need do it.
       !
       if (myrank == 0) then
         do ibc=1, numbc
@@ -709,6 +713,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       end if
       !
     else
+      !
+      !  NONHOMOGENEOUS BCS
       !
       !  Use absolute value of connectivity to ensure
       !  all DOF are assembled.

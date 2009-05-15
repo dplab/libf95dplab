@@ -1,0 +1,21 @@
+#  TEST PROBLEM:  5x5 tridiagonal system, homogeneous BCs, assembled RHS
+#  homoBC, useARHS
+T  T
+#  nDOFpe, nElem, nDOFgl, numBC
+2  4  5  1
+# conn [2x4]
+1 2  2 3  3 4  4 5
+# bcnodes  [1] 
+5
+# emats [2x2 x 4]
+7.0   -1.0  -1.0  4.0
+4.0   -2.0  -2.0  4.0
+5.0   -2.0  -2.0  6.0
+4.0   -3.0  -3.0 11.0
+# erhs  (2) x 4   [6 5 5 8 0] homoBC
+ 5 5
+-2 2
+ 2 5
+ 0 1
+#  if useARHS, arhs goes here 
+1.0 2.0 1.0 3.0 -1.0

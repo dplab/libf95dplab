@@ -46,18 +46,31 @@ PROGRAM LinearSolver
   !
   call ReadInput()
   !
-  CALL LinearSolverCreate(solver, &
-       &   NAME, conn, bcnodes, locsizes)
+  CALL LinearSolverCreate(solver, NAME,&
+       &   conn(:, myEmin:myEmax), bcnodes, locsizes)
   !
   !  Call solver according to options.
   !
   IF (homoBC) THEN
-    CALL LinearSolverSolve(solver, sol, eMats,&
-         &   ERHS=erhs, SOL_GLOBAL=solGlobal, STATUS=status)
+    IF (useARHS) THEN
+      CALL LinearSolverSolve(solver, sol, eMats(:, :, myEmin:myEmax), &
+           &   ERHS=erhs(:, myEmin:myEmax), ARHS=ARHS(myDmin:myDmax), &
+           &   SOL_GLOBAL=solGlobal, STATUS=status)
+    ELSE
+      CALL LinearSolverSolve(solver, sol, eMats(:, :, myEmin:myEmax), &
+           &   ERHS=erhs(:, myEmin:myEmax), &
+           &   SOL_GLOBAL=solGlobal, STATUS=status)
+    END IF
   ELSE
-    CALL LinearSolverSolve(solver, sol, eMats,&
-         &   ERHS=erhs, SOL_GLOBAL=solGlobal, &
-         &   BCVALS=bcVals, STATUS=status)
+    IF (useARHS) THEN
+      CALL LinearSolverSolve(solver, sol, eMats(:, :, myEmin:myEmax), &
+           &   ERHS=erhs(:, myEmin:myEmax), ARHS=ARHS(myDmin:myDmax), BCVALS=bcVals,&
+           &   SOL_GLOBAL=solGlobal, STATUS=status)
+    ELSE
+      CALL LinearSolverSolve(solver, sol, eMats(:, :, myEmin:myEmax), &
+           &   ERHS=erhs(:, myEmin:myEmax), BCVALS=bcVals,&
+           &   SOL_GLOBAL=solGlobal, STATUS=status)
+    END IF
   END IF
   !
   IF (myRank == 0) THEN

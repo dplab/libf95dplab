@@ -1,4 +1,4 @@
-#  TEST PROBLEM:  5x5 tridiagonal system 
+#  TEST PROBLEM:  5x5 tridiagonal system, homogeneous BCs, no assembled RHS
 #  homoBC, useARHS
 T  F
 #  nDOFpe, nElem, nDOFgl, numBC
@@ -17,6 +17,3 @@ T  F
 2 3
 2 8
 0 0
-#  if not homoBC, values go here
-1.0
-#  if useARHS, arhs goes here 

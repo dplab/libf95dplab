@@ -11,6 +11,15 @@ MODULE LinearSolverPETScModule
   !
   IMPLICIT NONE
   !
+  !  NOTE:  Here is how to write the PETSc vectors to an ascii file.
+  !
+  !  PetscViewer :: v
+  !  CALL PETScViewerASCIIOpen(Petsc_comm_world, "B.dat", v, IERR)
+  !  CALL VecView(self % b, v, IERR)
+  !  CALL VecView(self % b, v, IERR)
+  !  CALL MatView(self % A, v, IERR)
+  ! 
+  !
   ! ==================== PETSc Includes
   !
 #include "include/finclude/petsc.h"
@@ -325,14 +334,17 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  eMats -- the local elemental stiffness matrices
     !
     !  .     OPTIONAL ARGS
-    !  ERHS       -- the local elemental right-hand sides
-    !  ARHS       -- assembled right-hand side (1-based array);
-    !             -- mutually exclusive with ERHS
+    !  ERHS       -- the elemental right-hand sides for each process
+    !  ARHS       -- already-assembled right-hand side (1-based array);
+    !             -- each process sends its own DOFs; both ERHS and
+    !             -- ARHS can be passed together, but at least one
+    !             -- is required
     !  BCVALS     -- boundary values to apply (usually nonzero);
     !                this is a global array;  only values from 
     !                process 0 are used, but this argument must
     !                be present on all other processes
-    !  SOL_GLOBAL -- global solution vector
+    !  SOL_GLOBAL -- global solution vector (if present for one process,
+    !             -- it must be present for all)
     !  STATUS     -- return value; convergence status from PetSc
     !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
@@ -340,13 +352,15 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     DOUBLE PRECISION, INTENT(IN OUT) :: sol(:)
     DOUBLE PRECISION, INTENT(IN)     :: emats(:, :, :)
     !
-    DOUBLE PRECISION, INTENT(IN),  OPTIONAL :: ERHS(:, :)
-    DOUBLE PRECISION, INTENT(IN),  OPTIONAL :: ARHS(:)
-    DOUBLE PRECISION, INTENT(IN),  OPTIONAL :: BCVALS(:)
-    DOUBLE PRECISION, INTENT(OUT), OPTIONAL :: SOL_GLOBAL(:)
+    DOUBLE PRECISION, INTENT(IN)  :: ERHS(:, :)
+    DOUBLE PRECISION, INTENT(IN)  :: ARHS(:)
+    DOUBLE PRECISION, INTENT(IN)  :: BCVALS(:)
+    DOUBLE PRECISION, INTENT(OUT) :: SOL_GLOBAL(:)
     !
-    INTEGER, INTENT(OUT), OPTIONAL :: STATUS
-    TARGET :: self  ! so can use pointers on components
+    INTEGER, INTENT(OUT) :: STATUS
+    !
+    OPTIONAL :: ERHS, ARHS, BCVALS, SOL_GLOBAL, STATUS
+    TARGET   :: self  ! so can use pointers on components
     !
     ! ========== Locals
     !
@@ -366,9 +380,9 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     !  . If portion is assembled already, set to that; otherwise zero.
     !
-    if (PRESENT(arhs)) then
+    if (PRESENT(ARHS)) then
       !
-      call SetBFromARHS(self, arhs)
+      call SetBFromARHS(self, ARHS)
     else 
       !
       call VecSet   (self % b, 0.0d0, IERR)
@@ -378,11 +392,9 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     end if
     ! 
     !  . Add in unassembled contribution
-    !  -- if nonzero BCs, do not ignore contributions of those nodes, since
-    !     they will be backsolved
     !
     IF (PRESENT(ERHS)) THEN
-      CALL SetBFromERHS(self, ERHS, USE_ALL_DOF=PRESENT(BCVALS))
+      CALL SetBFromERHS(self, ERHS)
     END IF
     !
     ! ========== Handle BCs
@@ -391,10 +403,12 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !  the BCs, but not the system.  Then, subtracting, you get a homeogeneous
     !  system.
     !
+    bcn   => self % sysconn % bcs
+    numbc =  SIZE(bcn, 1)
+    !
     if (PRESENT(BCVALS)) then
       !
-      bcn   => self % sysconn % bcs
-      numbc =  SIZE(bcn, 1)
+      !  Set up the homogeneous problem:  A(x-x0) = b-b0
       !
       call FormA(self, EMATS, HOMOGENEOUS_BCS=.FALSE.)
       !
@@ -410,21 +424,21 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       call VecAssemblyBegin(self % x0, IERR)
       call VecAssemblyEnd  (self % x0, IERR)
       !
-      call MatMult(self %   A, self % x0,   self % ax0, IERR)
-      call VecAXPY(self % b,    -1.0d0,   self % ax0,   IERR)
-      !
-      !  Prepare to solve homogeneous problem:  A(x-x0) = b-b0
-      !
-      if (myrank == 0) then
-        call VecSetValues(self % b, numbc, bcn, &
-             &  SPREAD(0.0d0, DIM=1, NCOPIES=numbc), &
-             &  INSERT_VALUES, IERR)
-      end if
-      !
-      call VecAssemblyBegin(self % b, IERR)
-      call VecAssemblyEnd  (self % b, IERR)
+      call MatMult(self % A, self % x0,   self % ax0, IERR)
+      call VecAXPY(self % b,    -1.0d0,   self % ax0, IERR)
       !
     end if
+    !
+    !  Zero nodes with applied BCs.
+    !
+    if (myrank == 0) then
+      call VecSetValues(self % b, numbc, bcn, &
+           &  SPREAD(0.0d0, DIM=1, NCOPIES=numbc), &
+           &  INSERT_VALUES, IERR)
+    end if
+    !
+    call VecAssemblyBegin(self % b, IERR)
+    call VecAssemblyEnd  (self % b, IERR)
     !
     ! ========== Solve System
     !
@@ -567,29 +581,23 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   ! ====================================================   END:  SetBfromARHS
   ! ==================================================== BEGIN:  SetBfromERHS
   !
-  SUBROUTINE SetBfromERHS(self, Erhs, USE_ALL_DOF)
+  SUBROUTINE SetBfromERHS(self, Erhs)
     !
     !  Set the PETSc right-hand side from elemental right-hand sides.
     !
     !  NOTES:  
     !
     !  *  This appends to existing values.
-    !  *  CHECK THIS:  assembles all nodes in both cases, but only applies
-    !     BCs if USE_ALL_DOF is false.
     !
     ! ========== Arguments
     !
     !  .     REQUIRED ARGS
     !  self -- the LinearSolverType
     !  Erhs -- elemental right-hand side (references a 1-based array)
-    !  USE_ALL_DOF -- flag to assemble all DOF regardless of BC
-    !
-    !  .     OPTIONAL ARGS
     !
     TYPE(LinearSolverType), INTENT(IN OUT) :: self
     !
     DOUBLE PRECISION, INTENT(IN) :: Erhs(:, :)
-    LOGICAL, INTENT(IN) :: USE_ALL_DOF
     !
     TARGET :: self 
     !
@@ -608,43 +616,16 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     bcn   => self % sysconn % bcs
     numbc = SIZE(bcn, 1)
     !
-    if (USE_ALL_DOF) then
-      !
-      !  Assemble all nodes, regardless of applied BCs.
-      !
-      do elem=elmin, elmax
-        call VecSetValues(self % b, dofpe, abs(1 + sconn(:, elem)) - 1, &
-             &  erhs(:, elem), &
-             &  ADD_VALUES, IERR)
-      end do
-      !
-      call VecAssemblyBegin(self % b, IERR)
-      call VecAssemblyEnd  (self % b, IERR)
-      !
-    else
-      !
-      !  Only assemble nodes without applied BCs.
-      !
-      do elem=elmin, elmax
-        call VecSetValues(self % b, dofpe, abs(1 + sconn(:, elem)) - 1, &
-             &  erhs(:, elem), &
-             &  ADD_VALUES, IERR)
-        !
-      end do
-      !
-      call VecAssemblyBegin(self % b, IERR)
-      call VecAssemblyEnd  (self % b, IERR)
-      !
-      if (myrank == 0) then
-        CALL VecSetValues(self % b, numbc, bcn, &
-             &  SPREAD(0.0d0, DIM=1, NCOPIES=numbc), &
-             &  INSERT_VALUES, IERR)
-      end if
-      !
-      call VecAssemblyBegin(self % b, IERR)
-      call VecAssemblyEnd  (self % b, IERR)
-      !
-    end if
+    !  Assemble all nodes, regardless of applied BCs.
+    !
+    do elem=elmin, elmax
+      call VecSetValues(self % b, dofpe, abs(1 + sconn(:, elem)) - 1, &
+           &  erhs(:, elem), &
+           &  ADD_VALUES, IERR)
+    end do
+    !
+    call VecAssemblyBegin(self % b, IERR)
+    call VecAssemblyEnd  (self % b, IERR)
     !
   END SUBROUTINE SetBfromERHS
   !

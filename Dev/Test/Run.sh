@@ -16,3 +16,4 @@ MPIRUN=/opt/openmpi-1.2.7/bin/mpirun
 #
 cp $DATAFILE input.txt
 $MPIRUN -np $NUM_PROC $BINARY 
+rm -f input.txt

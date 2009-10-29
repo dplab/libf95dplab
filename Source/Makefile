@@ -7,11 +7,13 @@
 LIBBASE = f95dplab
 #
 SOURCES=\
-IntrinsicTypesModule.f95\
-ConstantsModule.f95\
-StringsModule.f95\
-FilesModule.f95\
-TimerModule.f95
+IntrinsicTypesModule.f90\
+ConstantsModule.f90\
+StringsModule.f90\
+FilesModule.f90\
+TimerModule.f90\
+CommandModule.f90\
+LibF95.f90
 #
 F90 = ifort
 F95 = ifort
@@ -19,7 +21,7 @@ F95FLAGS = -O  -module Modules
 #
 #--------------------*--------------------------------------------------
 #
-OBJECTS = $(SOURCES:.f95=.o)
+OBJECTS = $(SOURCES:.f90=.o)
 
 LIBRARY = lib$(LIBBASE).a
 #
@@ -34,7 +36,9 @@ Modules:
 #
 $(LIBRARY)(ConstantsModule.o):    $(LIBRARY)(IntrinsicTypesModule.o)
 $(LIBRARY)(FilesModule.o):        $(LIBRARY)(IntrinsicTypesModule.o)
+$(LIBRARY)(StringsModule.o):      $(LIBRARY)(ConstantsModule.o)
 $(LIBRARY)(StringsModule.o):      $(LIBRARY)(IntrinsicTypesModule.o)
+$(LIBRARY)(CommandModule.o):      $(LIBRARY)(StringsModule.o)
 #
 MODMODULES = \
 constantsmodule.mod\

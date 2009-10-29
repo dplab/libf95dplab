@@ -54,13 +54,14 @@ CONTAINS
     ! ========== Locals
     !
     CHARACTER(LEN=LEN(cmdLine)) :: word, args
+    INTEGER :: iStat
     !
     !--------------*-------------------------------------------------------
     !
     status = 0
     args = cmdLine
     !
-    CALL getWord(args, word)
+    CALL getWord(args, word, iStat)
     IF (word == command) THEN
       Match = .TRUE.
       CALL callback(args, status)

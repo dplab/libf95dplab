@@ -1,8 +1,14 @@
+!  $Id$
+!
 MODULE StringsModule
   !
-  !  $Id$
-  !
   !  String parameters and operations.
+  !
+  !  PUBLIC ENTITIES:
+  !  
+  !  STANDARD_LINE_LENGTH
+  !  getLine(unit, line, status, ECHO, COMMENT)
+  !  getWord(string, word, status)
   !
   !--------------Other Modules-------------------------------------------
   !
@@ -160,9 +166,9 @@ CONTAINS
     !  
     lstr = LEN_TRIM(string)
     if (lstr == 0) then
-       status = 1
-       word   = ASCII_SPACE
-       RETURN
+      status = 1
+      word   = ASCII_SPACE
+      RETURN
     endif
     !
     !  Locate the first blank character, put the word in `word' and
@@ -202,9 +208,9 @@ CONTAINS
     len_string = LEN(string)
     !
     do i=1, len_string
-       if (string(i:i) == from_char) then
-          string(i:i) = to_char
-       endif
+      if (string(i:i) == from_char) then
+        string(i:i) = to_char
+      endif
     enddo
     !
     RETURN

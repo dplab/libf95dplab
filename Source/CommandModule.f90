@@ -34,9 +34,10 @@ CONTAINS
     !
     ! cmdLine  -- string with command and arguments
     ! callback -- subroutine to call if command matches
+    ! command  -- the command being checked
+    ! status   -- return status of callback, if executed 
     !
-    CHARACTER(LEN=*), INTENT(IN OUT) :: command
-    CHARACTER(LEN=*), INTENT(IN) :: cmdLine
+    CHARACTER(LEN=*), INTENT(IN) :: command, cmdLine
     !
     INTERFACE
       SUBROUTINE callback(a, s)

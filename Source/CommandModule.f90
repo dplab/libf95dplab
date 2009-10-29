@@ -35,7 +35,7 @@ CONTAINS
     ! cmdLine  -- string with command and arguments
     ! callback -- subroutine to call if command matches
     !
-    CHARACTER(LEN=*), INTENT(IN) :: command
+    CHARACTER(LEN=*), INTENT(IN OUT) :: command
     CHARACTER(LEN=*), INTENT(IN) :: cmdLine
     !
     INTERFACE

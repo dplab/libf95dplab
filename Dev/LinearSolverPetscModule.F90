@@ -366,8 +366,11 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     INTEGER :: IERR, numbc, mySTATUS
     INTEGER, POINTER :: bcn(:)
+    LOGICAL :: statPresent
     !
     ! ================================================== Executable Code
+    !
+    statPresent = PRESENT(STATUS)
     !
     CALL SetStatus(RETURN_SUCCESS)
     !
@@ -484,7 +487,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       !
       ! ============================== Executable Code
       !
-      IF (PRESENT(STATUS)) THEN
+      IF (statPresent) THEN
         STATUS = stat
       END IF
       !
@@ -794,8 +797,11 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     call KSPGetConvergedReason(ksp, reason, IERR)
     CALL KSPGetIterationNumber(ksp, its, IERR)
     !
-    PRINT *, 'Linear system '//TRIM(ADJUSTL(self % name))// ':  iterations ', &
-         &   its, ', code ', reason
+    IF (myrank == 0) THEN
+      PRINT *, 'Linear system "'//TRIM(ADJUSTL(self % name))//'"'
+      PRINT *, '       iterations ', its, ', code ', reason
+    END IF
+
     IF (reason < 0) THEN
       CALL DescribeDivergedReason(0, reason)
     END IF

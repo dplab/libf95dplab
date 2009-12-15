@@ -13,11 +13,11 @@ MODULE TimerModule
   !  SUBROUTINE TimerStop(timer)
   !  TimerWrite(timer, unit)
   !
-  !--------------Other Modules
+  ! ========== Other Modules
   !
   IMPLICIT NONE
   !
-  !--------------Types
+  ! ========== Types
   !
   !  Basic type for timer.
   !
@@ -28,7 +28,7 @@ MODULE TimerModule
     REAL :: time_beg = 0.0, time_end = 0.0, time_total = 0.0
   END TYPE TimerType
   !
-  !-------------- Public Entities
+  ! ========== Public Entities
   !
   PRIVATE  ! all objects are private unless declared otherwise
   !
@@ -141,23 +141,24 @@ CONTAINS ! ===============================================================
     !
     write(unit, '(a)') 'Statistics for timer:  '//timer % name
     if (timer % active) then
-      WRITE(unit, '(a)')  INDENT // 'timer is currently active'
+      WRITE(unit, '(a30,a)')  'timer is currently:  ', 'ACTIVE'
     else
-      WRITE(unit, '(a)')  INDENT // 'timer is currently inactive'
+      WRITE(unit, '(a30,a)')  'timer is currently:  ', 'INACTIVE'
     end if
     !
     if (timer % failed) then
       WRITE(unit, '(a)')  INDENT // '*** timer failed'
     end if
     !
-    WRITE(unit, '(a,i0)') INDENT // 'timer starts:  ', timer % starts
-    WRITE(unit, '(a,i0)') INDENT // 'timer stops:  ', timer % stops
-    WRITE(unit, '(a,f0.4)') INDENT // 'total time in seconds:  ', timer % time_total
+    WRITE(unit, '(a30,i0)') 'timer starts:  ', timer % starts
+    WRITE(unit, '(a30,i0)') 'timer stops:  ', timer % stops
+    WRITE(unit, '(a30,f0.4)') 'total time in seconds:  ', timer % time_total
     !
     if (timer % stops > 0) then
-      WRITE(unit, '(a,f0.4)') INDENT // 'average time per call:  ', timer % time_total/REAL(timer % stops)
+      WRITE(unit, '(a30,f0.4)') 'average time per call:  ', timer % time_total/REAL(timer % stops)
     ELSE
-      WRITE(unit, '(a)') INDENT // 'timer has not been used'
+      WRITE(unit, '(a30,a)') 'average time per call:  ', 'NA'
+      RETURN 
     end if
     !
     !  Summary line.
@@ -169,12 +170,12 @@ CONTAINS ! ===============================================================
     END IF
     !
     IF (mylevel > 0) THEN
-      WRITE(myfmt, '(a,i0,a)') '(a,a35,', mylevel, 'x,f0.3,a,i0,a,f0.3)'
+      WRITE(myfmt, '(a,i0,a)') '(a30,a,', mylevel, 'x,f0.3,a,i0,a,f0.3)'
     ELSE
-      myfmt = '(a,a35,f0.3,a,i0,a,f0.3)'
+      myfmt = '(a30,a,f0.3,a,i0,a,f0.3)'
     END IF
 
-    WRITE(unit, myfmt) 'timer summary for ', ADJUSTR(timer % name) // ':  ', &
+    WRITE(unit, myfmt) 'SUMMARY:  ', TRIM(ADJUSTL(timer % name)) // '---', &
          &   timer % time_total, '/', timer % stops, '=',timer % time_total/REAL(timer % stops)
     !
   END SUBROUTINE TimerWrite

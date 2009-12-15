@@ -4,22 +4,20 @@ MODULE ConstantsModule
   !
   !  This module provides commonly used constants of all types.
   !
-  !
-  !--------------Other Modules------------------------------------------------------
-  !
+  ! ==================== Other Modules
   !
   USE IntrinsicTypesModule, ONLY : &
        &  RK => REAL_KIND, IK => INTEGER_KIND, LK => LOGICAL_KIND
-  !
-  !  *** End:
   !
   IMPLICIT NONE
   !
   PRIVATE RK, IK, LK
   !
-  !  *** Public Data:
+  ! ==================== Public Entities
   !
-  !--------------Reals---------------------------------------------------
+  PUBLIC ! all public
+  !
+  ! ========== Reals
   !
   !  Values for real constants are prefixed with
   !  "RK_" to indicate the default "REAL KIND".
@@ -55,12 +53,16 @@ MODULE ConstantsModule
        &    RK_PI_OVER_6 = RK_PI/RK_SIX,  &
        &  RK_PI_OVER_180 = RK_PI/RK_180,  &
        &  RK_180_OVER_PI = RK_180/RK_PI
-  
+
   REAL(RK), PUBLIC, PARAMETER ::&             !  For convenience ...
        &  DEGREES_PER_RADIAN = RK_180_OVER_PI,&
        &  RADIANS_PER_DEGREE = RK_PI_OVER_180
   !
-  !--------------Algebraic Numbers---------------------------------------
+  !  --- Architecture-Related Values
+  !
+  REAL(RK), PUBLIC, PARAMETER :: RK_HUGE = HUGE(RK_ONE)
+  !
+  !  --- Algebraic Numbers
   !
   REAL(RK), PUBLIC, PARAMETER ::&
        &   RK_ROOT_2 =&
@@ -77,18 +79,18 @@ MODULE ConstantsModule
        &   RK_ROOT_14       = RK_ROOT_2 * RK_ROOT_7,&
        &   RK_ROOT_3_HALVES = RK_ROOT_3/RK_ROOT_2
   !
-  !--------------Integers------------------------------------------------
+  ! ========== Integers
   !
   INTEGER(IK), PUBLIC, PARAMETER :: &
        &  IK_ZERO = 0_IK, IK_ONE = 1_IK, IK_TWO = 2_IK, IK_THREE = 3_IK,&
        &  IK_FOUR = 4_IK
   !
-  !--------------Logicals------------------------------------------------
+  ! ========== Logicals
   !
   LOGICAL(LK), PUBLIC, PARAMETER :: &
        &  TRUE = .TRUE., FALSE = .FALSE.
   !
-  !--------------Characters----------------------------------------------
+  ! ========== Characters
   !
   !  ASCII numbers of various characters.
   !  
@@ -99,7 +101,5 @@ MODULE ConstantsModule
        &  ASCII_CR   = ACHAR(13), ASCII_SPACE = ACHAR(32)
   !
   CHARACTER(LEN=*), PUBLIC, PARAMETER :: WHITESPACE = ASCII_SPACE//ASCII_TAB
- 
-  !  *** End:
   !
 END MODULE ConstantsModule

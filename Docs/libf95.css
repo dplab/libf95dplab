@@ -1,13 +1,24 @@
-/* Sample Style Sheet */
+/* Style Sheet for LibF95 */
+
+body{
+    background-color:  #e0e0ff;
+}
 
 H1, H2, H3 {
     text-align: center;
-    
 }
+H2 {
+    background-color:  #c0e0ff;
+}
+
 pre{
     padding-left: 5%;
 }
 pre.routine{
     padding-left: 0%;
     color: #0000AA;
+}
+
+span.public-data{
+    font-weight: bold;
 }

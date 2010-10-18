@@ -37,6 +37,7 @@ MODULE LinearSolverPETScModule
   LOGICAL,          PARAMETER :: DFLT_SYMMETRY = .TRUE.
   INTEGER,          PARAMETER :: PREALLOCATION_FACTOR = 4 ! for estimating DOF per row
   DOUBLE PRECISION, PARAMETER :: DEFAULT_ERROR_TOL = 1.0d-12
+  DOUBLE PRECISION, PARAMETER :: DEFAULT_DIV_TOL = 1.0d8
   !
   ! ========== Return Values
   !
@@ -80,7 +81,7 @@ MODULE LinearSolverPETScModule
     !
     !  Various settings for PETSc solvers.
     !
-    DOUBLE PRECISION :: error_tol = DEFAULT_ERROR_TOL
+    DOUBLE PRECISION :: error_tol = DEFAULT_ERROR_TOL, div_tol = DEFAULT_DIV_TOL
     INTEGER          :: maxits
     !
   END TYPE LinearSolverType
@@ -782,7 +783,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     call KSPSetTolerances(ksp, self % error_tol, &
          &   PETSC_DEFAULT_DOUBLE_PRECISION,&
-         &   PETSC_DEFAULT_DOUBLE_PRECISION, &
+         &   self % div_tol, &
          &   self % maxIts, IERR)
     !
     !  . command line options

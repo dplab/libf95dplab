@@ -15,9 +15,9 @@ TimerModule.f90\
 CommandModule.f90\
 LibF95.f90
 #
-F90 = ifort
-F95 = ifort
-F95FLAGS = -O  -module Modules
+F90 = gfortran
+F95 = gfortran
+#F95FLAGS = -O  -module Modules
 #
 #--------------------*--------------------------------------------------
 #

@@ -1,4 +1,3 @@
-!  $Id$
 !
 MODULE LibF95
   !
@@ -12,6 +11,7 @@ MODULE LibF95
   USE FilesModule 
   USE TimerModule 
   USE CommandModule
+  USE OptimModule
   !
   !--------------Public Data---------------------------------------------
   !

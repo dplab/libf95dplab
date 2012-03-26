@@ -1,4 +1,3 @@
-! -*- mode: f90; abbrev-mode: t -*-
 !
 MODULE ConstantsModule
   !
@@ -64,6 +63,9 @@ MODULE ConstantsModule
   !
   !  --- Algebraic Numbers
   !
+  !  Various roots, golden section.
+  !
+  !
   REAL(RK), PUBLIC, PARAMETER ::&
        &   RK_ROOT_2 =&
        &      1.41421356237309504880168872420969807856967187537694_RK,&
@@ -77,7 +79,9 @@ MODULE ConstantsModule
   REAL(RK), PUBLIC, PARAMETER ::&
        &   RK_ROOT_6        = RK_ROOT_2 * RK_ROOT_3,&
        &   RK_ROOT_14       = RK_ROOT_2 * RK_ROOT_7,&
-       &   RK_ROOT_3_HALVES = RK_ROOT_3/RK_ROOT_2
+       &   RK_ROOT_3_HALVES = RK_ROOT_3/RK_ROOT_2,&
+       &   RK_GOLD          = RK_ONE_HALF * (RK_ROOT_5 + RK_ONE),&
+       &   RK_GOLD_CONJ     = RK_ONE_HALF * (RK_ROOT_5 - RK_ONE)
   !
   ! ========== Integers
   !

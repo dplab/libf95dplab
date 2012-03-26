@@ -13,11 +13,15 @@ StringsModule.f90\
 FilesModule.f90\
 TimerModule.f90\
 CommandModule.f90\
+OptimModule.f90\
 LibF95.f90
 #
-F90 = ifort
-F95 = ifort
-F95FLAGS = -O  -module Modules
+F90 = gfortran
+F95 = gfortran
+# ifort# F95FLAGS = -O  -module Modules
+F95FLAGS = -O -M ./Modules
+#
+F90FLAGS = $(F95FLAGS)
 #
 #--------------------*--------------------------------------------------
 #
@@ -27,8 +31,8 @@ LIBRARY = lib$(LIBBASE).a
 #
 default:  $(LIBRARY)
 #
-$(LIBRARY): Modules $(LIBRARY)($(OBJECTS))
-	ranlib $@
+$(LIBRARY): Modules $(OBJECTS)
+	libtool -static -o $@ $(OBJECTS)
 Modules: 
 	mkdir Modules
 #
@@ -39,6 +43,8 @@ $(LIBRARY)(FilesModule.o):        $(LIBRARY)(IntrinsicTypesModule.o)
 $(LIBRARY)(StringsModule.o):      $(LIBRARY)(ConstantsModule.o)
 $(LIBRARY)(StringsModule.o):      $(LIBRARY)(IntrinsicTypesModule.o)
 $(LIBRARY)(CommandModule.o):      $(LIBRARY)(StringsModule.o)
+$(LIBRARY)(OptimModule.o):        $(LIBRARY)(IntrinsicTypesModule.o)
+$(LIBRARY)(OptimModule.o):        $(LIBRARY)(ConstantsModule.o)
 #
 MODMODULES = \
 constantsmodule.mod\

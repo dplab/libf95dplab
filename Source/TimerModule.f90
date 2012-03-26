@@ -1,4 +1,3 @@
-!  $Id$
 !
 MODULE TimerModule 
   !
@@ -63,10 +62,6 @@ CONTAINS ! ===============================================================
     !
     !  Activate timer.
     !
-    !--------------*-------------------------------------------------------
-    !
-    !  Arguments.
-    !
     TYPE(TimerType), INTENT(IN OUT) :: timer
     LOGICAL, INTENT(IN), OPTIONAL :: ACTIVATE
     !
@@ -128,8 +123,8 @@ CONTAINS ! ===============================================================
     !  Print statistics for each timer.
     !
     TYPE(TimerType), INTENT(IN) :: timer
-    INTEGER, INTENT(IN) :: unit
-    INTEGER, INTENT(IN), OPTIONAL :: level
+    INTEGER, INTENT(IN) :: unit             ! output unit number
+    INTEGER, INTENT(IN), OPTIONAL :: level  ! indentation level
     !
     !  Locals.
     !

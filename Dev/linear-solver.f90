@@ -1,4 +1,3 @@
-!  $Id$
 !
 PROGRAM LinearSolver
   !

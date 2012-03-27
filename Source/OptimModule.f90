@@ -51,6 +51,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
       END FUNCTION f
     END INTERFACE
     !
+    REAL(RK), INTENT(IN)  :: d(:)
     REAL(RK), INTENT(IN OUT) :: interval(2)
     REAL(RK), INTENT(OUT) :: fmin, xmin
     REAL(RK), INTENT(IN) :: tolx

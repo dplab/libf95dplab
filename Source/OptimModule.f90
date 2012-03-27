@@ -20,7 +20,7 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   !
   ! ==================================================== BEGIN:  minSearchGolden
   !
-  SUBROUTINE minSearchGolden(f, interval, fmin, xmin, tolx)
+  SUBROUTINE minSearchGolden(f, d, interval, fmin, xmin, tolx)
     !
     ! Use golden section search to find a minimum.
     !
@@ -32,7 +32,10 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! * ARGS *
     !
-    ! f is the function to be minimizedi
+    ! f is a function
+    !      the function to be minimized
+    ! d is a vector
+    !      data (fixed parameters) to be passed to f
     ! interval is a 2-vector
     !          giving endpoints of interval containing min; this is updated
     !          in this routine
@@ -41,9 +44,9 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     ! tolx is a scalar, the absolute tolerance on x
     !
     INTERFACE
-      FUNCTION f(x) RESULT(res)
-      USE IntrinsicTypesModule, RK => REAL_KIND
-        REAL(RK), INTENT(IN)  :: x
+      FUNCTION f(x, d) RESULT(res)
+        USE IntrinsicTypesModule, RK => REAL_KIND
+        REAL(RK), INTENT(IN)  :: x, d(:)
         REAL(RK) :: res
       END FUNCTION f
     END INTERFACE
@@ -56,17 +59,17 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     !  ========== Locals
     !
-    REAL(RK) :: lk, rk, ak, bk, dk, fa, fb
+    REAL(RK) :: l_k, r_k, ak, bk, dk, fa, fb
     !
     !  ================================================== Executable Code
     !
-    lk = interval(1)
-    rk = interval(2)
-    dk = rk - lk
-    ak = rk - GCONJ * dk
-    bk = lk + GCONJ * dk
-    fa = f(ak)
-    fb = f(bk)
+    l_k = interval(1)
+    r_k = interval(2)
+    dk = r_k - l_k
+    ak = r_k - GCONJ * dk
+    bk = l_k + GCONJ * dk
+    fa = f(ak, d)
+    fb = f(bk, d)
     fmin = MIN(fa, fb)
     !
     ! Loop until tolerance is reached.
@@ -75,21 +78,21 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     DO WHILE (dk < tolx)
       IF (fa <= fb) THEN
-        ! lk = lk
-        rk = bk
-        dk = rk - lk
-        ak = rk - GCONJ * dk
+        ! l_k = l_k
+        r_k = bk
+        dk = r_k - l_k
+        ak = r_k - GCONJ * dk
         bk = ak
-        fa = f(ak)
+        fa = f(ak, d)
         fb = fa
       ELSE
-        lk = ak
-        ! rk = rk
-        dk = rk - lk
+        l_k = ak
+        ! r_k = r_k
+        dk = r_k - l_k
         ak = bk
-        bk = lk + GCONJ * dk
+        bk = l_k + GCONJ * dk
         fa = fb
-        fb = f(bk)
+        fb = f(bk, d)
       END IF
     END DO
     !
@@ -97,13 +100,13 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     fmin = MIN(fa, fb)
     IF (fa <= fb) THEN
-      interval(1) = lk
+      interval(1) = l_k
       xmin = ak
       interval(2) = bk
     ELSE
       interval(1) = ak
       xmin = bk
-      interval(2) = rk
+      interval(2) = r_k
     END IF
     !
   END SUBROUTINE minSearchGolden

@@ -10,13 +10,19 @@ MODULE OptimModule
 
   IMPLICIT NONE
   !
-  !  ==================== Public Entities
+  ! ==================== Public Entities
   !
-  !  variables, procedures, constants, derived types and namelist groups
+  ! variables, procedures, constants, derived types and namelist groups
+  !
+  PRIVATE   ! all objects are private unless declared otherwise
   !
   PUBLIC :: minSearchGolden, solveNewton1D
   !
-  PRIVATE   ! all objects are private unless declared otherwise
+  ! ==================== Module Data
+  !
+  ! Flags for newton solver
+  !
+  INTEGER, PARAMETER :: NEWTON_RES = 0, NEWTON_DER = 1
   !
 CONTAINS ! ============================================= MODULE PROCEDURES
   !
@@ -117,14 +123,13 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   ! ====================================================   END:  minSearchGolden
   ! ==================================================== BEGIN:  solveNewton
   !
-  SUBROUTINE solveNewton1D(f,fprime, d, x, tolx, status)
+  SUBROUTINE solveNewton1D(f, d, x, tolx, status)
     !
     ! Newton solver for nonlinear equations
     !
     ! f is a function
-    !      the residual to make zero
-    ! fprime is a function
-    !      the derivative of f
+    !      the residual to make zero; it also returns the
+    !      the derivative of the residual on request
     ! d is an array
     !      fixed parameters to pass to f and fprime
     ! x is a scalar
@@ -135,17 +140,18 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !      flag indicating success(==0)|failure(/=0)
     !
     INTERFACE
-      FUNCTION f(x, d) RESULT(res)
+      FUNCTION f(x, d, der) RESULT(res)
+        !
+        ! x -- the point to evaluate
+        ! d -- array of fixed data
+        ! der -- flag indicating return value of residual or derivative
+        !
         USE IntrinsicTypesModule, RK => REAL_KIND
         REAL(RK), INTENT(IN)  :: x, d(:)
+        INTEGER :: der
         REAL(RK) :: res
       END FUNCTION f
 
-      FUNCTION fprime(x, d) RESULT(res)
-        USE IntrinsicTypesModule, RK => REAL_KIND
-        REAL(RK), INTENT(IN)  :: x, d(:)
-        REAL(RK) :: res
-      END FUNCTION fprime
     END INTERFACE
 
     REAL(RK), INTENT(IN) :: d(:), tolx
@@ -169,8 +175,8 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     DO i=1, ITERMAX
 
       xold = x
-      res = f(x, d)
-      dx = res/fprime(x, d)
+      res = f(x, d, NEWTON_RES)
+      dx = res/f(x, d, NEWTON_DER)
       x = x - dx
       dx = abs(dx)
       !

@@ -17,6 +17,7 @@ MODULE OptimModule
   PRIVATE   ! all objects are private unless declared otherwise
   !
   PUBLIC :: minSearchGolden, solveNewton1D
+  PUBLIC :: NEWTON_RES, NEWTON_DER
   !
   ! ==================== Module Data
   !

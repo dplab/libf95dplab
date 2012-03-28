@@ -14,6 +14,8 @@ MODULE OptimModule
   !
   !  variables, procedures, constants, derived types and namelist groups
   !
+  PUBLIC :: minSearchGolden, solveNewton1D
+  !
   PRIVATE   ! all objects are private unless declared otherwise
   !
 CONTAINS ! ============================================= MODULE PROCEDURES
@@ -113,6 +115,91 @@ CONTAINS ! ============================================= MODULE PROCEDURES
   END SUBROUTINE minSearchGolden
   !
   ! ====================================================   END:  minSearchGolden
+  ! ==================================================== BEGIN:  solveNewton
+  !
+  SUBROUTINE solveNewton1D(f,fprime, d, x, tolx, status)
+    !
+    ! Newton solver for nonlinear equations
+    !
+    ! f is a function
+    !      the residual to make zero
+    ! fprime is a function
+    !      the derivative of f
+    ! d is an array
+    !      fixed parameters to pass to f and fprime
+    ! x is a scalar
+    !      on input, the initial guess; on ouput, the solution, if converged
+    ! tolx is a scalar
+    !      the solution tolerance on x
+    ! status 
+    !      flag indicating success(==0)|failure(/=0)
+    !
+    INTERFACE
+      FUNCTION f(x, d) RESULT(res)
+        USE IntrinsicTypesModule, RK => REAL_KIND
+        REAL(RK), INTENT(IN)  :: x, d(:)
+        REAL(RK) :: res
+      END FUNCTION f
+
+      FUNCTION fprime(x, d) RESULT(res)
+        USE IntrinsicTypesModule, RK => REAL_KIND
+        REAL(RK), INTENT(IN)  :: x, d(:)
+        REAL(RK) :: res
+      END FUNCTION fprime
+    END INTERFACE
+
+    REAL(RK), INTENT(IN) :: d(:), tolx
+    REAL(RK), INTENT(IN OUT) :: x
+    INTEGER, INTENT(OUT) :: status
+    !
+    !  ========== Locals
+    !
+    ! hardwire max iterations to prevent infinite loops
+    !
+    INTEGER :: ITERMAX = 1000, N_INCREASED = 5
+    INTEGER :: i
+    REAL(RK) :: res, dx, xold, dxold, n_inc
+    !
+    ! =================================================== Executable Code
+    !
+    status = 1  ! so that failure is set iterations reaching itermax
+    !
+    n_inc = 0
+    dxold = HUGE(dx)
+    DO i=1, ITERMAX
+
+      xold = x
+      res = f(x, d)
+      dx = res/fprime(x, d)
+      x = x - dx
+      dx = abs(dx)
+      !
+      IF (dx < tolx) THEN
+        ! converged
+        status = 0 
+        EXIT
+      END IF
+      !
+      ! Check for divergence
+      !
+      IF (dx < dxold) THEN
+        n_inc = 0
+      ELSE
+        n_inc = n_inc + 1
+        IF (n_inc >= N_INCREASED) THEN
+          ! Diverged
+          status = 1
+          EXIT
+        END IF
+      END IF
+      !
+      dxold = dx
+
+    END DO
+    !
+  END SUBROUTINE solveNewton1D
+  !
+  ! ====================================================   END:  solveNewton
 
   !
 END MODULE OptimModule

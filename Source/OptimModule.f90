@@ -86,15 +86,15 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! * Interval is reduced by a constant factor each time.
     !
-    DO WHILE (dk < tolx)
+    DO WHILE (dk > tolx)
       IF (fa <= fb) THEN
         ! l_k = l_k
         r_k = bk
         dk = r_k - l_k
         ak = r_k - GCONJ * dk
         bk = ak
-        fa = f(ak, d)
         fb = fa
+        fa = f(ak, d)
       ELSE
         l_k = ak
         ! r_k = r_k

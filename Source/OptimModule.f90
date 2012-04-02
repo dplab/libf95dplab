@@ -163,9 +163,9 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     !
     ! hardwire max iterations to prevent infinite loops
     !
-    INTEGER :: ITERMAX = 1000, N_INCREASED = 5
+    INTEGER :: ITERMAX = 1000, N_INCREASED = 3
     INTEGER :: i
-    REAL(RK) :: res, dx, xold, dxold, n_inc
+    REAL(RK) :: res, fprime, dx, dxold, n_inc
     !
     ! =================================================== Executable Code
     !
@@ -175,9 +175,14 @@ CONTAINS ! ============================================= MODULE PROCEDURES
     dxold = HUGE(dx)
     DO i=1, ITERMAX
 
-      xold = x
       res = f(x, d, NEWTON_RES)
-      dx = res/f(x, d, NEWTON_DER)
+      fprime = f(x, d, NEWTON_DER)
+      IF (fprime == RK_ZERO) THEN
+        ! zero derivative
+        status = 2
+        EXIT
+      END IF
+      dx = res/fprime
       x = x - dx
       dx = abs(dx)
       !

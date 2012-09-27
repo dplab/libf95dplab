@@ -2,31 +2,30 @@
 #
 # Makefile for building f90dplab library.
 #
-# * ifort compiler
+# * gfortran compiler
 # * linux system (CENTOS)
 #
 # Included files: Sources.mk, Rules-fortran.mk, Dependencies.mk
 #
 include Sources.mk
 #
-# Intel (ifort)  compiler flags
+# gfortran compiler flags
 #
 # -O              : optimize
-# -module Modules : put .mod files in directory Modules
 # -I<dir>         : search <dir> for modules and included files
+# -J<dir>         : put .mod files in directory Modules
 #
-F90 = ifort
-F95 = ifort
+F90 = gfortran
+F95 = gfortran
 #
-F90FLAGS = -O  -module Modules
+F90FLAGS = -O  -JModules -IModules
 #
 #--------------------*--------------------------------------------------
 #
 default:  $(LIBRARY)
-
+#
 $(LIBRARY): Modules $(LIBRARY)($(OBJECTS))
 	ranlib $@
-
 Modules: force
 	mkdir -p Modules
 #

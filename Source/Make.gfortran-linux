@@ -1,0 +1,37 @@
+# -*-mode: makefile; abbrev-mode: t -*-
+#
+# Makefile for building f90dplab library.
+#
+# * gfortran compiler
+# * linux system (CENTOS)
+#
+# Included files: Sources.mk, Rules-fortran.mk, Dependencies.mk
+#
+include Sources.mk
+#
+# gfortran compiler flags
+#
+# -O              : optimize
+# -I<dir>         : search <dir> for modules and included files
+# -J<dir>         : put .mod files in directory Modules
+#
+F90 = gfortran
+F95 = gfortran
+#
+F90FLAGS = -O  -JModules -IModules
+#
+#--------------------*--------------------------------------------------
+#
+default:  $(LIBRARY)
+#
+$(LIBRARY): Modules $(LIBRARY)($(OBJECTS))
+	ranlib $@
+Modules: force
+	mkdir -p Modules
+#
+# Need to define "DIRT" for "clean" target
+#
+DIRT=$(LIBRARY) Modules/*.mod
+#
+include Rules-fortran.mk
+include Dependencies.mk

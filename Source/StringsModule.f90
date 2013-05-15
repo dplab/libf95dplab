@@ -9,22 +9,26 @@ MODULE StringsModule
   !  getLine(unit, line, status, ECHO, COMMENT)
   !  getWord(string, word, status)
   !
-  !--------------Other Modules-------------------------------------------
+  !  PRIVATE ENTITIES:
+  !  change_char()  ! may want to make public if use arises
   !
   USE IntrinsicTypesModule, IK => INTEGER_KIND
   USE ConstantsModule, ONLY:  ASCII_TAB, ASCII_SPACE
 
   IMPLICIT NONE
   !
-  !--------------Data----------------------------------------------------
+  ! ========== Public Entities
+  !
+  PRIVATE   ! all objects are private unless declared otherwise
+
+  PUBLIC :: STANDARD_LINE_LENGTH
+  PUBLIC :: getLine, getWord
+  !
+  ! ========== Data
   !
   !  Standard character size for reading a line from a text file.
   !
   INTEGER, PARAMETER :: STANDARD_LINE_LENGTH = 256
-  !
-  !--------------Public Data---------------------------------------------
-  !
-  PUBLIC   ! all objects are private unless declared otherwise
   !
 CONTAINS
   !
